@@ -29,6 +29,8 @@ stringer <beat>
 | `CAMPFIRE_URL` | the old name, still read, so rooms can migrate one beat at a time |
 | `DIGEST_TIMEZONE` | which day "yesterday" means; default `Europe/Amsterdam` |
 | `DIGEST_DATE` | report this day (`YYYY-MM-DD`) instead of yesterday |
+| `GITHUB_TOKEN` | read access to pull requests, for the `renovate` beat |
+| `GITHUB_REPO` | `owner/name`, default `ronaldlokers/homelab` |
 
 With no room configured it prints to stdout, which is what a dry run is.
 
@@ -42,7 +44,7 @@ docker run --rm -e DIGEST_DATE=2026-03-29 ghcr.io/ronaldlokers/stringer:latest h
 |---|---|---|
 | `hello` | nothing; proves the wire and the zone database | shipped |
 | `glucose` | Nightscout — the daily and fortnight sheets | statistics and renderer ported; the beat itself is next |
-| `renovate` | dependency updates | not yet moved |
+| `renovate` | dependency updates left open, and which are not routine | shipped |
 | `alerts` | Alertmanager webhooks | not yet moved |
 
 ## Working on it

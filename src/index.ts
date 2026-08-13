@@ -8,11 +8,13 @@
  */
 
 import { hello } from "./beats/hello.js";
+import { renovate } from "./beats/renovate.js";
 import { roundFrom } from "./rounds.js";
 import type { Round } from "./rounds.js";
 
 const BEATS: Record<string, (round: Round) => Promise<void>> = {
   hello,
+  renovate,
 };
 
 async function main(): Promise<number> {
