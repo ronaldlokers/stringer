@@ -14,6 +14,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 
 import { Groups, hasEscalated } from "../copy/alerts/groups.js";
 import { renderBriefing, type Briefing } from "../copy/cluster/briefing.js";
+import { Reported, renderCheck, renderClear, type Check } from "../copy/cluster/check.js";
 import {
   firingFingerprints,
   render,
@@ -63,12 +64,19 @@ export async function listen(environment: NodeJS.ProcessEnv): Promise<Bridge> {
     // The same room this cluster's briefing posts to directly — one room, two
     // clusters, each labelled.
     ["/briefing", roundFor(environment.CAMPFIRE_BRIEFING_URL)],
+    // Where the scheduled checks file what they found. The briefing's room by
+    // default, because a check's finding is the same news as the briefing's and
+    // belongs beside it — and because a second URL here would be a second copy
+    // of one credential, which is the drift this bridge exists to avoid. Its
+    // own only if it is ever given one.
+    ["/check", roundFor(environment.CAMPFIRE_CHECK_URL ?? environment.CAMPFIRE_BRIEFING_URL)],
   ]);
   const silencing: Silencing = {
     grafanaBase: environment.GRAFANA_BASE?.trim() || "https://grafana.ronaldlokers.nl",
     datasource: environment.SILENCE_DATASOURCE?.trim() || "Alertmanager",
   };
   const groups = new Groups();
+  const reported = new Reported();
 
   for (const [path, round] of destinations) {
     if (!round && REQUIRED.has(path)) {
@@ -79,7 +87,7 @@ export async function listen(environment: NodeJS.ProcessEnv): Promise<Bridge> {
   }
 
   const server = createServer((request, response) => {
-    void handle(request, response, destinations, groups, silencing);
+    void handle(request, response, destinations, groups, reported, silencing);
   });
 
   const port = Number(environment.LISTEN_PORT ?? "8080");
@@ -102,6 +110,7 @@ async function handle(
   response: ServerResponse,
   destinations: Map<string, Round | null>,
   groups: Groups,
+  reported: Reported,
   silencing: Silencing,
 ): Promise<void> {
   const path = (request.url ?? "").split("?")[0]!;
@@ -161,6 +170,14 @@ async function handle(
         await round.say(html);
         process.stdout.write("/briefing: published\n");
       }
+    } else if (path === "/check") {
+      // A check files what it found on every run, including nothing, and the
+      // bridge decides whether that is worth saying. Deciding here rather than
+      // in each check keeps the state in one process instead of two scripts,
+      // and keeps a check to the one thing it is good at.
+      const report = asCheck(payload);
+      const what = await deliverCheck(round, reported, report);
+      process.stdout.write(`/check: ${report.check}: ${what}\n`);
     } else {
       await round.say(renderFlux(payload as FluxPayload));
       process.stdout.write("/flux: published 1 event(s)\n");
@@ -207,6 +224,32 @@ export async function deliverAlerts(
 }
 
 /**
+ * A check's findings, said or not said.
+ *
+ * The record is written after the post, never before: a failed post answers
+ * 500 and the sender retries, and a report already remembered would make that
+ * retry silent — the finding lost to the machinery meant to carry it.
+ */
+export async function deliverCheck(
+  round: Round,
+  reported: Reported,
+  report: Check,
+): Promise<string> {
+  const verdict = reported.decide(report);
+  if (verdict === "post") {
+    await round.say(renderCheck(report)!);
+    reported.remember(report);
+    return `${report.findings.length} finding(s) posted`;
+  }
+  if (verdict === "clear") {
+    await round.say(renderClear(report));
+    reported.forget(report);
+    return "clear";
+  }
+  return "nothing new, saying nothing";
+}
+
+/**
  * A posted briefing, taken at arm's length.
  *
  * The sender is another cluster, so the payload is input rather than a value
@@ -228,6 +271,28 @@ export function asBriefing(payload: unknown): Briefing {
     overnight: lines(raw["overnight"]),
     skipped: lines(raw["skipped"]),
     windowHours: Number.isFinite(windowHours) ? windowHours : 24,
+    ...(cluster ? { cluster } : {}),
+  };
+}
+
+/**
+ * A check's findings, taken at arm's length, on the same terms as a briefing:
+ * the sender is a Job in some cluster, so this is input rather than a value
+ * this process built.
+ *
+ * A report with no usable name still renders — as `check` — because a nameless
+ * finding in the room beats a 400 nobody reads.
+ */
+export function asCheck(payload: unknown): Check {
+  const raw = (payload ?? {}) as Record<string, unknown>;
+  const text = (value: unknown): string => (typeof value === "string" ? value.trim() : "");
+  const findings = Array.isArray(raw["findings"])
+    ? raw["findings"].filter((item): item is string => typeof item === "string")
+    : [];
+  const cluster = text(raw["cluster"]);
+  return {
+    check: text(raw["check"]) || "check",
+    findings,
     ...(cluster ? { cluster } : {}),
   };
 }

@@ -27,6 +27,8 @@ stringer <beat>
 |---|---|
 | `ROOM_URL` | where the copy goes: `campfire+https://…`, `ntfy+https://…`, or `stdout:` |
 | `CAMPFIRE_FLUX_URL` | second destination for the `alerts` beat's `/flux` route |
+| `CAMPFIRE_BRIEFING_URL` | where a cluster with no room of its own files, via `/briefing` and `/check` |
+| `CAMPFIRE_CHECK_URL` | a room for `/check` alone, when findings should not sit with the briefing |
 | `GRAFANA_BASE` | where a silence link points |
 | `LISTEN_PORT` | for `alerts`, default 8080 |
 | `CAMPFIRE_URL` | the old name, still read, so rooms can migrate one beat at a time |
