@@ -21,6 +21,16 @@ export interface Briefing {
   readonly overnight: readonly string[];
   readonly skipped: readonly string[];
   readonly windowHours: number;
+  /**
+   * Which cluster this is about, when more than one files into the same room.
+   *
+   * Absent for the cluster that owns the room — labelling the common case adds
+   * a word to every heading and distinguishes nothing. Present for anyone
+   * filing from elsewhere, because without it a staging failure reads as a
+   * production one, which is the confusion the Flux events already label
+   * against.
+   */
+  readonly cluster?: string;
 }
 
 /**
@@ -44,10 +54,13 @@ export function bullets(items: readonly string[]): string {
 }
 
 export function renderBriefing(briefing: Briefing): string | null {
-  const { problems, overnight, skipped, windowHours } = briefing;
+  const { problems, overnight, skipped, windowHours, cluster } = briefing;
   if (!problems.length && !overnight.length && !skipped.length) return null;
 
   const parts: string[] = [];
+  // Once, at the top, rather than on every heading: the whole message is about
+  // one cluster, and repeating the name would read as a comparison.
+  if (cluster) parts.push(heading(`[${escape(cluster)}]`));
   if (problems.length) {
     parts.push(
       heading(`⚠️ ${problems.length} problem${problems.length === 1 ? "" : "s"}`),

@@ -13,6 +13,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 
 import { Groups, hasEscalated } from "../copy/alerts/groups.js";
+import { renderBriefing, type Briefing } from "../copy/cluster/briefing.js";
 import {
   firingFingerprints,
   render,
@@ -22,6 +23,11 @@ import {
   type Silencing,
 } from "../copy/alerts/render.js";
 import { roundFrom, type Round } from "../rounds.js";
+
+/**
+ * Paths whose absence has to be reported here, because nothing else would.
+ */
+const REQUIRED = new Set(["/alerts", "/flux"]);
 
 export interface Bridge {
   readonly close: () => Promise<void>;
@@ -53,6 +59,10 @@ export async function listen(environment: NodeJS.ProcessEnv): Promise<Bridge> {
   const destinations = new Map<string, Round | null>([
     ["/alerts", roundFor(environment.CAMPFIRE_URL ?? environment.ALERTS_ROOM_URL)],
     ["/flux", roundFor(environment.CAMPFIRE_FLUX_URL ?? environment.FLUX_ROOM_URL)],
+    // Where a cluster with no Campfire of its own files its morning briefing.
+    // The same room this cluster's briefing posts to directly — one room, two
+    // clusters, each labelled.
+    ["/briefing", roundFor(environment.CAMPFIRE_BRIEFING_URL)],
   ]);
   const silencing: Silencing = {
     grafanaBase: environment.GRAFANA_BASE?.trim() || "https://grafana.ronaldlokers.nl",
@@ -61,7 +71,7 @@ export async function listen(environment: NodeJS.ProcessEnv): Promise<Bridge> {
   const groups = new Groups();
 
   for (const [path, round] of destinations) {
-    if (!round) {
+    if (!round && REQUIRED.has(path)) {
       process.stdout.write(
         `no destination configured for ${path}; /healthz serves 503 until there is\n`,
       );
@@ -98,8 +108,15 @@ async function handle(
 
   if (request.method === "GET") {
     // Probes. Report unhealthy when a destination is unconfigured rather than
-    // accepting events and dropping them.
-    const missing = [...destinations].filter(([, round]) => !round).map(([name]) => name);
+    // accepting events and dropping them — but only for the paths whose senders
+    // cannot report the problem themselves. Alertmanager and Flux retry a 404
+    // in silence, so an unconfigured room there is invisible unless this says
+    // so. A briefing is filed by a Job, which fails visibly in the cluster that
+    // sent it, so requiring that room here would only mean a bridge with no
+    // second cluster reports itself broken forever.
+    const missing = [...destinations]
+      .filter(([name, round]) => !round && REQUIRED.has(name))
+      .map(([name]) => name);
     const ok = path === "/healthz" && missing.length === 0;
     response.writeHead(ok ? 200 : 503);
     response.end(ok ? "ok" : `unconfigured: ${missing.join(", ")}`);
@@ -131,6 +148,19 @@ async function handle(
       const what = await deliverAlerts(round, groups, payload as AlertPayload, silencing);
       const count = (payload as AlertPayload).alerts?.length ?? 0;
       process.stdout.write(`/alerts: ${count} alert(s), ${what}\n`);
+    } else if (path === "/briefing") {
+      // Data in, markup out. The sender ships what it found and this renders
+      // it, same as the other two paths — which is what keeps a LAN-only
+      // ingress from also being a way to post arbitrary HTML into a room.
+      const html = renderBriefing(asBriefing(payload));
+      if (html === null) {
+        // A briefing with nothing in it is not an error; it is the state this
+        // whole beat exists to produce. Accept it and say nothing.
+        process.stdout.write("/briefing: nothing to report, saying nothing\n");
+      } else {
+        await round.say(html);
+        process.stdout.write("/briefing: published\n");
+      }
     } else {
       await round.say(renderFlux(payload as FluxPayload));
       process.stdout.write("/flux: published 1 event(s)\n");
@@ -174,6 +204,32 @@ export async function deliverAlerts(
   const posted = await round.say(html);
   if (posted.id && !resolved) groups.remember(groupKey, posted.id, firing);
   return `posted message ${posted.id ?? "?"}`;
+}
+
+/**
+ * A posted briefing, taken at arm's length.
+ *
+ * The sender is another cluster, so the payload is input rather than a value
+ * this process constructed. Everything is coerced to the shape the renderer
+ * expects: a missing array becomes an empty one and a non-string item is
+ * dropped, so a malformed payload produces a shorter briefing rather than a
+ * crash or a rendered `[object Object]`.
+ *
+ * Escaping is the renderer's job and it already does it; this is about shape.
+ */
+export function asBriefing(payload: unknown): Briefing {
+  const raw = (payload ?? {}) as Record<string, unknown>;
+  const lines = (value: unknown): string[] =>
+    Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+  const cluster = typeof raw["cluster"] === "string" ? raw["cluster"].trim() : "";
+  const windowHours = Number(raw["windowHours"]);
+  return {
+    problems: lines(raw["problems"]),
+    overnight: lines(raw["overnight"]),
+    skipped: lines(raw["skipped"]),
+    windowHours: Number.isFinite(windowHours) ? windowHours : 24,
+    ...(cluster ? { cluster } : {}),
+  };
 }
 
 async function body(request: IncomingMessage): Promise<string> {
