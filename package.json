@@ -8,7 +8,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node --eval \"require('node:fs').cpSync('test/golden','dist/test/golden',{recursive:true})\"",
     "typecheck": "tsc --noEmit",
     "test": "npm run build && node --test \"dist/test/**/*.test.js\"",
     "start": "node dist/src/index.js"
