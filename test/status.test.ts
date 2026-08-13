@@ -123,6 +123,27 @@ describe("redaction", () => {
     assert.match(redact("/rooms/1/12345-Ab3dEf9hIj2k/messages"), /<bot key redacted>/);
   });
 
+  it("redacts the token rather than the word in front of it", () => {
+    // The bug this replaces: `Bearer` was matched as the value, so the word
+    // was redacted and the credential survived.
+    for (const header of [
+      "Authorization: Bearer abcdef123456789",
+      "authorization=Bearer abcdef123456789",
+      "Bearer abcdef123456789",
+      "Authorization: Basic dXNlcjpwYXNzd29yZA==",
+    ]) {
+      const cleaned = redact(header);
+      assert.ok(!cleaned.includes("abcdef123456789"), cleaned);
+      assert.ok(!cleaned.includes("dXNlcjpwYXNzd29yZA"), cleaned);
+      assert.match(cleaned, /<redacted>/);
+    }
+  });
+
+  it("still redacts a plain key and value", () => {
+    assert.match(redact("api_key: abcdef123456"), /api_key: <redacted>/);
+    assert.match(redact('password="hunter2xyz"'), /password="<redacted>"/);
+  });
+
   it("leaves ordinary log text alone", () => {
     const line = "level=info msg=\"reconciled Kustomization apps in 1.2s\"";
     assert.equal(redact(line), line);

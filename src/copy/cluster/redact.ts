@@ -24,9 +24,15 @@ const REDACTIONS: readonly [RegExp, string][] = [
   // Campfire bot keys, which are id-token and appear in any URL the bot logs.
   [/\b\d+-[A-Za-z0-9]{12}\b/g, "<bot key redacted>"],
   // key=value and key: value for anything that names itself a secret.
+  //
+  // The optional scheme is the part worth explaining. Without it,
+  // `Authorization: Bearer abc123` matched with "Bearer" as the *value* — so
+  // the word got redacted and the token was left in place, which is the
+  // opposite of the point. Consuming the scheme puts the redaction where the
+  // secret is: `Authorization: Bearer <redacted>`.
   [
-    /\b(password|passwd|secret|token|api[_-]?key|access[_-]?key|authorization|bearer)\b(\s*[:=]\s*|\s+)("?)([^\s"',]{6,})\3/gi,
-    "$1$2$3<redacted>$3",
+    /\b(password|passwd|secret|token|api[_-]?key|access[_-]?key|authorization|bearer)\b(\s*[:=]\s*|\s+)((?:bearer|basic|token)\s+)?("?)([^\s"',]{6,})\4/gi,
+    "$1$2$3$4<redacted>$4",
   ],
 ];
 
