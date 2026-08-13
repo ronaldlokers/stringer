@@ -49,6 +49,7 @@ docker run --rm -e DIGEST_DATE=2026-03-29 ghcr.io/ronaldlokers/stringer:latest h
 | `glucose` | Nightscout — the daily and fortnight sheets | statistics and renderer ported; the beat itself is next |
 | `renovate` | dependency updates left open, and which are not routine | shipped |
 | `alerts` | Alertmanager and Flux webhooks; long-running | shipped |
+| `briefing` | the cluster at 07:00, or silence | shipped |
 
 ## Working on it
 

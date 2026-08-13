@@ -1,0 +1,97 @@
+/**
+ * Reading the Kubernetes API, against a budget.
+ *
+ * Every read is served from the API server's watch cache rather than etcd:
+ * `resourceVersion=0` is what a controller's informer does on first list, and
+ * it is the difference between a quorum read of every pod in the cluster and a
+ * copy out of memory.
+ *
+ * Without it, six unfiltered cluster-wide lists in a five-second burst tripped
+ * API Priority and Fairness, and two invocations in three came back with parts
+ * of the answer replaced by a 429. Degrading honestly is the point of that
+ * branch, but a summary that is degraded half the time is one you stop reading.
+ *
+ * The cost is that a read may be very slightly stale. For a summary that
+ * already reports backup ages in hours, that is not a cost.
+ */
+
+import { readFile } from "node:fs/promises";
+
+const TOKEN_FILE = "/var/run/secrets/kubernetes.io/serviceaccount/token";
+export const CA_FILE = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt";
+
+/** Per-request ceiling, well inside the overall budget. */
+const PER_REQUEST_MS = 1_500;
+
+export interface Deadline {
+  /** Milliseconds remaining, from a monotonic clock. */
+  readonly remaining: () => number;
+}
+
+export function budget(milliseconds: number): Deadline {
+  const started = performance.now();
+  return { remaining: () => milliseconds - (performance.now() - started) };
+}
+
+export interface KubeList<T> {
+  readonly items?: readonly T[];
+}
+
+export class Kube {
+  constructor(private readonly base: string) {}
+
+  async list<T>(path: string, deadline: Deadline): Promise<readonly T[]> {
+    const remaining = deadline.remaining();
+    if (remaining <= 0) throw new Error(`budget spent before ${path}`);
+
+    const headers: Record<string, string> = { Accept: "application/json" };
+    // Re-read per call. The projected token is short-lived and rotated in
+    // place, so a value cached at startup stops working within the hour.
+    const token = await readFile(TOKEN_FILE, "utf8").catch(() => null);
+    if (token) headers["Authorization"] = `Bearer ${token.trim()}`;
+
+    const separator = path.includes("?") ? "&" : "?";
+    const response = await fetch(`${this.base}${path}${separator}resourceVersion=0`, {
+      headers,
+      signal: AbortSignal.timeout(Math.min(PER_REQUEST_MS, remaining)),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status} for ${path}`);
+    const payload = (await response.json()) as KubeList<T>;
+    return payload.items ?? [];
+  }
+}
+
+export interface Condition {
+  readonly type?: string;
+  readonly status?: string;
+  readonly reason?: string;
+  readonly message?: string;
+  readonly lastTransitionTime?: string;
+}
+
+export interface Meta {
+  readonly name: string;
+  readonly namespace?: string;
+  readonly creationTimestamp?: string;
+}
+
+export interface Resource {
+  readonly metadata: Meta;
+  readonly status?: { conditions?: readonly Condition[] } & Record<string, unknown>;
+}
+
+export function readyCondition(object: Resource): Condition | null {
+  return object.status?.conditions?.find((c) => c.type === "Ready") ?? null;
+}
+
+export function parseTime(stamp: string): Date {
+  return new Date(stamp);
+}
+
+export function hoursSince(stamp: string, now: Date): number {
+  return (now.getTime() - parseTime(stamp).getTime()) / 3_600_000;
+}
+
+export function minutesSince(stamp: string, now: Date): number {
+  return (now.getTime() - parseTime(stamp).getTime()) / 60_000;
+}
