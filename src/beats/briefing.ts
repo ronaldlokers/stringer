@@ -9,6 +9,8 @@
  *   PROMETHEUS_URL         where to ask what fired overnight
  *   BRIEFING_WINDOW_HOURS  default 24
  *   DISK_WARN_PERCENT      default 80
+ *   BRIEFING_BRIDGE_URL    file through a bridge instead of posting directly
+ *   CLUSTER                which cluster this is, when filing through a bridge
  */
 
 import {
@@ -24,6 +26,30 @@ import {
   checkOvernightAlerts,
 } from "../copy/cluster/prometheus.js";
 import type { Round } from "../rounds.js";
+
+/**
+ * Filing from a cluster that has no room of its own.
+ *
+ * Staging has no Campfire. It could be given a bot key and post directly, and
+ * that is precisely what the Flux alerts deliberately do not do: they POST to
+ * the bridge in the other cluster, which holds the key and does the posting. So
+ * no credential crosses the boundary and there is no second copy to drift.
+ *
+ * What crosses is the briefing itself — the arrays, not the markup. The bridge's
+ * only authentication is that its ingress is LAN-only, so a path taking rendered
+ * HTML would let anything on that network post arbitrary markup into a room.
+ * Sending data and letting the bridge render it is the same shape as /alerts and
+ * /flux, and closes that by construction rather than by validation.
+ */
+async function fileThroughBridge(url: string, state: Briefing): Promise<void> {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(state),
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!response.ok) throw new Error(`bridge returned ${response.status}`);
+}
 
 /**
  * The whole gathering budget.
@@ -74,7 +100,19 @@ export async function briefing(round: Round, environment = process.env): Promise
     skipped.push(`overnight alerts: ${String(error)}`);
   }
 
-  const state: Briefing = { problems, overnight, skipped, windowHours };
+  const cluster = environment.CLUSTER?.trim();
+  const state: Briefing = {
+    problems,
+    overnight,
+    skipped,
+    windowHours,
+    ...(cluster ? { cluster } : {}),
+  };
+
+  // Rendered here even when the bridge will render it again, because silence is
+  // the design and that decision belongs to the cluster with the facts. A
+  // briefing that arrives every morning saying everything is fine is one you
+  // stop opening.
   const body = renderBriefing(state);
   if (body === null) {
     process.stdout.write("briefing: nothing to report, saying nothing\n");
@@ -84,5 +122,12 @@ export async function briefing(round: Round, environment = process.env): Promise
     `briefing: ${problems.length} problem(s), ${overnight.length} overnight, ` +
       `${skipped.length} not checked\n`,
   );
+
+  const bridge = environment.BRIEFING_BRIDGE_URL?.trim();
+  if (bridge) {
+    await fileThroughBridge(bridge, state);
+    process.stdout.write("filed through the bridge\n");
+    return;
+  }
   await round.say(body);
 }
