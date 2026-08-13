@@ -304,12 +304,16 @@ function dayMarks(today: Day, bands: readonly Band[]): string {
  */
 function findingBlock(items: readonly Finding[], start: number): string {
   const out: string[] = [];
-  const floor = LAYOUT.foot - 24;
   let top = start;
   for (const [key, sentence] of items) {
     const lines = wrap("body", sentence, WIDTH - MARGIN - 250);
     const height = LAYOUT.findingStep + (lines.length - 1) * 34;
-    if (top + height > floor) break;
+    // How far this finding's *ink* reaches, not how far it advances the next
+    // one. Measuring the advance drops a finding that fits comfortably: the
+    // row is 70 tall but the last baseline sits 40 below its rule, and only
+    // that has to clear the foot.
+    const ink = top + 40 + (lines.length - 1) * 34 + 12;
+    if (ink > LAYOUT.foot) break;
     out.push(rect(MARGIN, top, MEASURE, 1, RULE));
     out.push(text(MARGIN, top + 40, "body", key, BAND_COLOUR["in range"]));
     lines.forEach((line, index) => {

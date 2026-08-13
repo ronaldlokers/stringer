@@ -102,6 +102,18 @@ describe("nothing runs off the sheet", () => {
     }
   });
 
+  it("keeps a finding that fits", () => {
+    // The over-correction: measuring the row advance rather than the ink
+    // dropped "the night" from an ordinary day, where it sits clear of the
+    // foot with room to spare.
+    const svg = daySheet(fixture("fortnight-flat"));
+    const bodies = [...svg.matchAll(/font-size="30"[^>]*>([^<]+)</g)].map((m) => m[1]);
+    assert.ok(
+      bodies.some((line) => line?.includes("the same as every day")),
+      "the second finding should still be drawn",
+    );
+  });
+
   it("keeps every drawn x inside the canvas", () => {
     for (const build of [fortnightSheet, daySheet]) {
       const svg = build(fixture("fortnight-ordinary"));
