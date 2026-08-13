@@ -7,39 +7,88 @@
  * bots with about ten lines of Campfire in them.
  */
 
+/** What a round hands back, so a beat can come back to what it said. */
+export interface Posted {
+  /** A handle this transport can amend later, or null if it cannot. */
+  readonly id: string | null;
+}
+
 export interface Round {
   /** Post words. */
-  say(html: string): Promise<void>;
+  say(html: string): Promise<Posted>;
   /** Post a picture. Some mornings this is the entire post. */
-  show(png: Uint8Array, filename: string): Promise<void>;
+  show(png: Uint8Array, filename: string): Promise<Posted>;
+  /**
+   * Change something already said, quietly where the transport allows it.
+   *
+   * Not every destination can. Where one cannot, this posts anew and returns
+   * the new handle, so a beat never has to ask which happened — it gets a
+   * handle back either way and uses it next time.
+   *
+   * The difference is not cosmetic where it exists. Campfire's message update
+   * does not call `room.receive`, so an amendment reaches nobody's phone,
+   * which is exactly what a resolution should do. A transport without it turns
+   * every amendment into a fresh notification; that is the honest degradation,
+   * not a bug.
+   */
+  amend(id: string, html: string): Promise<Posted>;
 }
+
+const NOWHERE: Posted = { id: null };
 
 class CampfireRound implements Round {
   constructor(private readonly url: string) {}
 
-  async say(html: string): Promise<void> {
-    await expectOk(
-      await fetch(this.url, {
-        method: "POST",
-        headers: { "Content-Type": "text/html; charset=utf-8" },
-        body: html,
-      }),
-    );
+  async say(html: string): Promise<Posted> {
+    const response = await fetch(this.url, {
+      method: "POST",
+      headers: { "Content-Type": "text/html; charset=utf-8" },
+      body: html,
+    });
+    await expectOk(response);
+    return { id: messageIdFrom(response.headers.get("location")) };
   }
 
-  async show(png: Uint8Array, filename: string): Promise<void> {
+  async show(png: Uint8Array, filename: string): Promise<Posted> {
     // The same bot route takes either: Campfire permits `attachment` when the
     // multipart form carries one and falls back to the raw body otherwise.
     const form = new FormData();
     form.append("attachment", pngBlob(png), filename);
-    await expectOk(await fetch(this.url, { method: "POST", body: form }));
+    const response = await fetch(this.url, { method: "POST", body: form });
+    await expectOk(response);
+    return { id: messageIdFrom(response.headers.get("location")) };
   }
+
+  async amend(id: string, html: string): Promise<Posted> {
+    const response = await fetch(`${this.url}/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "text/html; charset=utf-8" },
+      body: html,
+    });
+    if (response.ok) return { id };
+    // 404 is the message having been deleted by hand. Anything else is
+    // unexpected, and in both cases a new message beats no message.
+    process.stdout.write(`amend of ${id} failed (${response.status}), posting instead\n`);
+    return this.say(html);
+  }
+}
+
+/**
+ * The id out of the Location header a create answers with.
+ *
+ * Campfire's create is `head :created, location: message_url(@message)` — an
+ * empty body and a URL — so the id is the last path segment rather than a
+ * field in a JSON response.
+ */
+export function messageIdFrom(location: string | null): string | null {
+  const match = /\/(\d+)\D*$/.exec(location ?? "");
+  return match ? match[1]! : null;
 }
 
 class NtfyRound implements Round {
   constructor(private readonly url: string) {}
 
-  async say(html: string): Promise<void> {
+  async say(html: string): Promise<Posted> {
     await expectOk(
       await fetch(this.url, {
         method: "POST",
@@ -47,9 +96,10 @@ class NtfyRound implements Round {
         body: html,
       }),
     );
+    return NOWHERE;
   }
 
-  async show(png: Uint8Array, filename: string): Promise<void> {
+  async show(png: Uint8Array, filename: string): Promise<Posted> {
     await expectOk(
       await fetch(this.url, {
         method: "PUT",
@@ -57,17 +107,30 @@ class NtfyRound implements Round {
         body: pngBlob(png),
       }),
     );
+    return NOWHERE;
+  }
+
+  /** ntfy has no notion of editing what it delivered, so this posts anew. */
+  async amend(_id: string, html: string): Promise<Posted> {
+    return this.say(html);
   }
 }
 
 /** Prints instead of posting. What tests and a dry run use. */
 class StdoutRound implements Round {
-  async say(html: string): Promise<void> {
+  async say(html: string): Promise<Posted> {
     process.stdout.write(`${html}\n`);
+    return NOWHERE;
   }
 
-  async show(png: Uint8Array, filename: string): Promise<void> {
+  async show(png: Uint8Array, filename: string): Promise<Posted> {
     process.stdout.write(`[${filename}: ${png.byteLength} bytes]\n`);
+    return NOWHERE;
+  }
+
+  async amend(id: string, html: string): Promise<Posted> {
+    process.stdout.write(`[amending ${id}] ${html}\n`);
+    return { id };
   }
 }
 

@@ -26,6 +26,9 @@ stringer <beat>
 | Variable | Meaning |
 |---|---|
 | `ROOM_URL` | where the copy goes: `campfire+https://…`, `ntfy+https://…`, or `stdout:` |
+| `CAMPFIRE_FLUX_URL` | second destination for the `alerts` beat's `/flux` route |
+| `GRAFANA_BASE` | where a silence link points |
+| `LISTEN_PORT` | for `alerts`, default 8080 |
 | `CAMPFIRE_URL` | the old name, still read, so rooms can migrate one beat at a time |
 | `DIGEST_TIMEZONE` | which day "yesterday" means; default `Europe/Amsterdam` |
 | `DIGEST_DATE` | report this day (`YYYY-MM-DD`) instead of yesterday |
@@ -45,7 +48,7 @@ docker run --rm -e DIGEST_DATE=2026-03-29 ghcr.io/ronaldlokers/stringer:latest h
 | `hello` | nothing; proves the wire and the zone database | shipped |
 | `glucose` | Nightscout — the daily and fortnight sheets | statistics and renderer ported; the beat itself is next |
 | `renovate` | dependency updates left open, and which are not routine | shipped |
-| `alerts` | Alertmanager webhooks | not yet moved |
+| `alerts` | Alertmanager and Flux webhooks; long-running | shipped |
 
 ## Working on it
 
@@ -72,6 +75,12 @@ src/rounds.ts   delivery: campfire, ntfy, stdout
 src/numbers.ts  arithmetic and formatting every beat shares
 src/time.ts     local days, and the two a year that are not 24 hours long
 ```
+
+A round is `say`, `show` and `amend`. Amending is optional in effect: where a
+transport cannot change what it already delivered, it posts anew and hands back
+the new handle, so a beat never has to ask which happened. It matters where it
+exists — Campfire's update does not notify, which is exactly what a resolved
+alert should do — and degrades honestly where it does not.
 
 [DESIGN.md](DESIGN.md) records the visual system the press draws to — palette,
 type, composition, and what it refuses. It moved here with the renderer; a
