@@ -17,6 +17,7 @@ import {
 } from "../copy/cluster/briefing.js";
 import { checkBackups, checkCerts, checkFlux, checkPods, checkVolumes } from "../copy/cluster/checks.js";
 import { budget, Kube } from "../copy/cluster/kube.js";
+import { checkSecretRefs } from "../copy/cluster/secrets.js";
 import {
   checkDiskHeadroom,
   checkNodeCerts,
@@ -24,8 +25,16 @@ import {
 } from "../copy/cluster/prometheus.js";
 import type { Round } from "../rounds.js";
 
-/** The whole gathering budget. The interactive path shares this number. */
-const DEADLINE_MS = 5_000;
+/**
+ * The whole gathering budget.
+ *
+ * Not the interactive one. `verbs.ts` has five seconds because Campfire hangs
+ * up at seven and posts a failure notice over the answer; nothing waits on a
+ * CronJob at half past six, so the same number here only bought a briefing that
+ * reported checks as unrunnable whenever the API server was slow. That is the
+ * one failure mode this beat is built to avoid.
+ */
+const DEADLINE_MS = 30_000;
 
 export async function briefing(round: Round, environment = process.env): Promise<void> {
   const kube = new Kube(environment.KUBE_API?.trim() || "https://kubernetes.default.svc");
@@ -54,6 +63,7 @@ export async function briefing(round: Round, environment = process.env): Promise
   await attempt("postgres backups", async () => (await checkBackups(kube, deadline, now)).problems);
   await attempt("certs", async () => (await checkCerts(kube, deadline, now)).problems);
   await attempt("volumes", async () => (await checkVolumes(kube, deadline, now)).problems);
+  await attempt("secret references", () => checkSecretRefs(kube, deadline));
   await attempt("node certificates", () => checkNodeCerts(prometheus));
   await attempt("disk headroom", () => checkDiskHeadroom(prometheus, diskWarn));
 
