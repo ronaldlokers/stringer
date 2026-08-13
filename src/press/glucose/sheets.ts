@@ -18,31 +18,23 @@ import {
   modalDay,
   timeInRange,
   valuesOf,
-} from "../copy/glucose/bands.js";
-import { findings, outliers, type Finding } from "../copy/glucose/findings.js";
-import { MMOL } from "../copy/glucose/units.js";
-import { mean, fixed, percent, pstdev } from "../numbers.js";
+} from "../../copy/glucose/bands.js";
+import { findings, outliers, type Finding } from "../../copy/glucose/findings.js";
+import { MMOL } from "../../copy/glucose/units.js";
+import { mean, fixed, percent, pstdev } from "../../numbers.js";
+import { GRID, GROUND, HEIGHT, INK, MARGIN, MUTED, PAPER, RULE, WIDTH } from "../tokens.js";
+import { circle, polyline, rect, text, width, wrap } from "../svg.js";
+import { LAYOUT } from "./layout.js";
 import {
   BAND_COLOUR,
   BAND_FILL,
-  GRID,
-  GROUND,
-  HEIGHT,
-  INK,
-  LAYOUT,
-  MARGIN,
-  MUTED,
-  PAPER,
-  RULE,
+  SEVERITY,
   TARGET_EDGES,
   TARGET_FILL,
-  WIDTH,
   Y_MAX,
   Y_MIN,
-} from "./tokens.js";
-import { circle, polyline, rect, text, width, wrap } from "./svg.js";
+} from "./palette.js";
 
-const SEVERITY = ["in range", "high", "very high", "low", "very low"] as const;
 const MEASURE = WIDTH - 2 * MARGIN;
 
 export const FORTNIGHT_SOURCE = "glucose, fourteen days  ·  nightscout";

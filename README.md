@@ -66,7 +66,8 @@ A reporter works a **beat** and files **copy**; the copy goes out on a **round**
 ```
 src/beats/      one entry point per beat; what the CronJob runs
 src/copy/       what gets written about a beat, and the sums behind it
-src/press/      the sheets: SVG out, rasterised by resvg
+src/press/      the house style, an SVG builder, and font metrics
+src/press/<beat>/  what that beat's sheets look like
 src/rounds.ts   delivery: campfire, ntfy, stdout
 src/numbers.ts  arithmetic and formatting every beat shares
 src/time.ts     local days, and the two a year that are not 24 hours long

@@ -5,6 +5,11 @@
 Scope: **what stringer draws**, whichever room the copy goes out to. Recorded
 from the built sheets in `src/press/`, not from intentions.
 
+The house style — ground, ink, faces, type scale, canvas — is in
+`src/press/tokens.ts`, because a second beat's sheets would want the same. What
+a beat's colours *mean* and where its design puts things live with that beat, in
+`src/press/<beat>/palette.ts` and `layout.ts`.
+
 It said "the campfire namespace" while it lived in the homelab repository, which
 stopped being true the moment the transports went room-agnostic. The rooms are
 interchangeable; the visual system is not.

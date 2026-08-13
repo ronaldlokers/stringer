@@ -2,9 +2,9 @@
 
 import { Resvg } from "@resvg/resvg-js";
 
-import type { Band, Day } from "../copy/glucose/bands.js";
+import type { Band, Day } from "../../copy/glucose/bands.js";
+import { WIDTH } from "../tokens.js";
 import { daySheet, fortnightSheet } from "./sheets.js";
-import { WIDTH } from "./tokens.js";
 
 function rasterise(svg: string): Uint8Array {
   const resvg = new Resvg(svg, {

@@ -26,7 +26,7 @@ import {
   wholeDay,
   type Entry,
 } from "../copy/glucose/days.js";
-import { renderDay, renderFortnight } from "../press/render.js";
+import { renderDay, renderFortnight } from "../press/glucose/index.js";
 import { localDay, yesterday, type LocalDay } from "../time.js";
 import type { Round } from "../rounds.js";
 

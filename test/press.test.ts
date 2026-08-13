@@ -15,10 +15,11 @@ import { describe, it } from "node:test";
 
 import type { Day, Reading } from "../src/copy/glucose/bands.js";
 import { findings, outliers } from "../src/copy/glucose/findings.js";
-import { renderDay, renderFortnight } from "../src/press/render.js";
-import { daySheet, fortnightSheet } from "../src/press/sheets.js";
+import { renderDay, renderFortnight } from "../src/press/glucose/index.js";
+import { daySheet, fortnightSheet } from "../src/press/glucose/sheets.js";
 import { width, wrap } from "../src/press/svg.js";
-import { HEIGHT, LAYOUT, MARGIN, WIDTH } from "../src/press/tokens.js";
+import { HEIGHT, MARGIN, WIDTH } from "../src/press/tokens.js";
+import { LAYOUT } from "../src/press/glucose/layout.js";
 
 const NAMES = ["ordinary", "spike", "low", "flat"] as const;
 
