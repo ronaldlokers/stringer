@@ -65,11 +65,43 @@ export class Kube {
     return response.text();
   }
 
-  async list<T>(path: string, deadline: Deadline): Promise<readonly T[]> {
+  /**
+   * Ask the API server for metadata and nothing else.
+   *
+   * A list of Secrets normally arrives with every value in it. This header is
+   * how a controller says it only wants names — the API server drops the rest
+   * server-side, so the values never cross the wire and are never in this
+   * process's memory to be logged by accident.
+   *
+   * RBAC cannot express the same restriction: `list` on secrets is `list` on
+   * secrets. This is a narrower request under the same grant, which is worth
+   * doing anyway.
+   */
+  static readonly METADATA_ONLY = "application/json;as=PartialObjectMetadataList;v=v1;g=meta.k8s.io";
+
+  /** One object rather than a collection. */
+  async object<T>(path: string, deadline: Deadline): Promise<T> {
+    return (await this.json(path, deadline)) as T;
+  }
+
+  async list<T>(
+    path: string,
+    deadline: Deadline,
+    accept = "application/json",
+  ): Promise<readonly T[]> {
+    const payload = (await this.json(path, deadline, accept)) as KubeList<T>;
+    return payload.items ?? [];
+  }
+
+  private async json(
+    path: string,
+    deadline: Deadline,
+    accept = "application/json",
+  ): Promise<unknown> {
     const remaining = deadline.remaining();
     if (remaining <= 0) throw new Error(`budget spent before ${path}`);
 
-    const headers: Record<string, string> = { Accept: "application/json" };
+    const headers: Record<string, string> = { Accept: accept };
     // Re-read per call. The projected token is short-lived and rotated in
     // place, so a value cached at startup stops working within the hour.
     const token = await readFile(TOKEN_FILE, "utf8").catch(() => null);
@@ -81,8 +113,7 @@ export class Kube {
       signal: AbortSignal.timeout(Math.min(PER_REQUEST_MS, remaining)),
     });
     if (!response.ok) throw new Error(`HTTP ${response.status} for ${path}`);
-    const payload = (await response.json()) as KubeList<T>;
-    return payload.items ?? [];
+    return response.json();
   }
 }
 
