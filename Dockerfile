@@ -20,6 +20,15 @@ RUN npm run build && npm prune --omit=dev
 
 FROM node:22-bookworm-slim
 
+# The sheets name two faces and resvg resolves them from the system. Without
+# these it does not fail — it silently substitutes whatever it can find, and
+# the sheet comes out in a face nobody chose, at widths the layout did not
+# plan for. The test suite renders inside this image and checks the type.
+RUN apt-get update \
+ && apt-get install --no-install-recommends -y \
+      fonts-urw-base35 fonts-jetbrains-mono fontconfig \
+ && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist

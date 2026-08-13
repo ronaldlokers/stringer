@@ -41,7 +41,7 @@ docker run --rm -e DIGEST_DATE=2026-03-29 ghcr.io/ronaldlokers/stringer:latest h
 | Beat | Covers | State |
 |---|---|---|
 | `hello` | nothing; proves the wire and the zone database | shipped |
-| `glucose` | Nightscout — the daily and fortnight sheets | not yet moved |
+| `glucose` | Nightscout — the daily and fortnight sheets | statistics and renderer ported; the beat itself is next |
 | `renovate` | dependency updates | not yet moved |
 | `alerts` | Alertmanager webhooks | not yet moved |
 
@@ -64,10 +64,15 @@ A reporter works a **beat** and files **copy**; the copy goes out on a **round**
 ```
 src/beats/      one entry point per beat; what the CronJob runs
 src/copy/       what gets written about a beat, and the sums behind it
+src/press/      the sheets: SVG out, rasterised by resvg
 src/rounds.ts   delivery: campfire, ntfy, stdout
 src/numbers.ts  arithmetic and formatting every beat shares
 src/time.ts     local days, and the two a year that are not 24 hours long
 ```
+
+[DESIGN.md](DESIGN.md) records the visual system the press draws to — palette,
+type, composition, and what it refuses. It moved here with the renderer; a
+specification belongs in the repository that holds an implementation of it.
 
 ## Days are the point
 
