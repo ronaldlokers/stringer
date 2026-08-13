@@ -18,6 +18,17 @@
 import { readFile } from "node:fs/promises";
 
 const TOKEN_FILE = "/var/run/secrets/kubernetes.io/serviceaccount/token";
+
+/**
+ * The cluster CA is trusted through NODE_EXTRA_CA_CERTS, set by the image's
+ * entrypoint rather than here: Node reads that variable once at startup, so a
+ * program cannot arrange its own trust after the fact.
+ *
+ * Worth knowing because the failure gives you nothing. An untrusted API server
+ * surfaces as a bare `TypeError: fetch failed`, with no mention of a
+ * certificate anywhere, and every check reports itself unavailable while
+ * Prometheus — plain HTTP — keeps working.
+ */
 export const CA_FILE = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt";
 
 /** Per-request ceiling, well inside the overall budget. */

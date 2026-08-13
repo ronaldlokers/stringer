@@ -32,8 +32,8 @@ RUN apt-get update \
 WORKDIR /app
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
-COPY package.json ./
+COPY package.json entrypoint.sh ./
 
 # Nothing here needs to write, and nothing here needs a name.
 USER node
-ENTRYPOINT ["node", "dist/src/index.js"]
+ENTRYPOINT ["/app/entrypoint.sh"]
