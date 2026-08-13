@@ -51,6 +51,20 @@ export interface KubeList<T> {
 export class Kube {
   constructor(private readonly base: string) {}
 
+  /** A raw read, for the tools `why` uses. Unbounded by the verb deadline:
+   *  it runs on the asynchronous path, where nothing is waiting. */
+  async text(path: string): Promise<string> {
+    const headers: Record<string, string> = {};
+    const token = await readFile(TOKEN_FILE, "utf8").catch(() => null);
+    if (token) headers["Authorization"] = `Bearer ${token.trim()}`;
+    const response = await fetch(`${this.base}${path}`, {
+      headers,
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status} for ${path}`);
+    return response.text();
+  }
+
   async list<T>(path: string, deadline: Deadline): Promise<readonly T[]> {
     const remaining = deadline.remaining();
     if (remaining <= 0) throw new Error(`budget spent before ${path}`);

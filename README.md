@@ -50,6 +50,7 @@ docker run --rm -e DIGEST_DATE=2026-03-29 ghcr.io/ronaldlokers/stringer:latest h
 | `renovate` | dependency updates left open, and which are not routine | shipped |
 | `alerts` | Alertmanager and Flux webhooks; long-running | shipped |
 | `briefing` | the cluster at 07:00, or silence | shipped |
+| `status` | answers `@Kubernetes status` and its siblings; long-running | shipped |
 
 ## Working on it
 
@@ -70,12 +71,19 @@ A reporter works a **beat** and files **copy**; the copy goes out on a **round**
 ```
 src/beats/      one entry point per beat; what the CronJob runs
 src/copy/       what gets written about a beat, and the sums behind it
+src/desks/      inbound: a question arrives and is answered
 src/press/      the house style, an SVG builder, and font metrics
 src/press/<beat>/  what that beat's sheets look like
 src/rounds.ts   delivery: campfire, ntfy, stdout
 src/numbers.ts  arithmetic and formatting every beat shares
 src/time.ts     local days, and the two a year that are not 24 hours long
 ```
+
+A **round** carries copy out; a **desk** takes a question in. Campfire's desk is
+the sharper of the two: it delivers a mention by POSTing to a callback URL and
+treats the *response body* as the reply, so the bot holds no key at all and has
+seven seconds before Campfire posts its own failure notice. A desk without that
+contract receives, then posts.
 
 A round is `say`, `show` and `amend`. Amending is optional in effect: where a
 transport cannot change what it already delivered, it posts anew and hands back
