@@ -20,13 +20,13 @@ Secrets, the overlays. This repo owns the code and ships one image.
 ## Running one
 
 ```
-stringer <desk>
+stringer <beat>
 ```
 
 | Variable | Meaning |
 |---|---|
 | `ROOM_URL` | where the copy goes: `campfire+https://…`, `ntfy+https://…`, or `stdout:` |
-| `CAMPFIRE_URL` | the old name, still read, so rooms can migrate one desk at a time |
+| `CAMPFIRE_URL` | the old name, still read, so rooms can migrate one beat at a time |
 | `DIGEST_TIMEZONE` | which day "yesterday" means; default `Europe/Amsterdam` |
 | `DIGEST_DATE` | report this day (`YYYY-MM-DD`) instead of yesterday |
 
@@ -36,9 +36,9 @@ With no room configured it prints to stdout, which is what a dry run is.
 docker run --rm -e DIGEST_DATE=2026-03-29 ghcr.io/ronaldlokers/stringer:latest hello
 ```
 
-## Desks
+## Beats
 
-| Desk | Beat | State |
+| Beat | Covers | State |
 |---|---|---|
 | `hello` | nothing; proves the wire and the zone database | shipped |
 | `glucose` | Nightscout — the daily and fortnight sheets | not yet moved |
@@ -56,6 +56,18 @@ docker build -t stringer:dev .
 
 Tests are `node:test` and types are `tsc` — nothing else, matching the code
 they cover.
+
+## How it is laid out
+
+A reporter works a **beat** and files **copy**; the copy goes out on a **round**.
+
+```
+src/beats/      one entry point per beat; what the CronJob runs
+src/copy/       what gets written about a beat, and the sums behind it
+src/rounds.ts   delivery: campfire, ntfy, stdout
+src/numbers.ts  arithmetic and formatting every beat shares
+src/time.ts     local days, and the two a year that are not 24 hours long
+```
 
 ## Days are the point
 

@@ -1,29 +1,30 @@
 #!/usr/bin/env node
 /**
- * `stringer <desk>` — run one desk, once.
+ * `stringer <beat>` — work one beat, once.
  *
- * Each desk covers a beat and files to whatever round the environment names.
- * The CronJob passes the desk as its only argument.
+ * A beat is the territory one reporter covers; the copy it files goes out on
+ * whatever round the environment names. The CronJob passes the beat as its
+ * only argument.
  */
 
-import { hello } from "./desks/hello.js";
+import { hello } from "./beats/hello.js";
 import { roundFrom } from "./rounds.js";
 import type { Round } from "./rounds.js";
 
-const DESKS: Record<string, (round: Round) => Promise<void>> = {
+const BEATS: Record<string, (round: Round) => Promise<void>> = {
   hello,
 };
 
 async function main(): Promise<number> {
   const name = process.argv[2];
-  const desk = name ? DESKS[name] : undefined;
-  if (!desk) {
-    const known = Object.keys(DESKS).join(", ");
+  const beat = name ? BEATS[name] : undefined;
+  if (!beat) {
+    const known = Object.keys(BEATS).join(", ");
     process.stderr.write(`usage: stringer <${known}>\n`);
     return 2;
   }
   try {
-    await desk(roundFrom());
+    await beat(roundFrom());
     return 0;
   } catch (error) {
     // Say so rather than failing quietly: a desk that stops filing is

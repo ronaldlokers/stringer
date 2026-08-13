@@ -105,3 +105,10 @@ export function yesterday(now: Date, timeZone: string): LocalDay {
 export function hoursIn(day: LocalDay): number {
   return (day.end - day.start) / 3_600_000;
 }
+
+/** Minutes past local midnight, as `HH:MM`. */
+export function clock(minute: number): string {
+  const whole = Math.trunc(minute);
+  const hour = Math.floor(whole / 60);
+  return `${String(hour).padStart(2, "0")}:${String(whole % 60).padStart(2, "0")}`;
+}

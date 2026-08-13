@@ -21,7 +21,9 @@ import {
   timeInRange,
   valuesOf,
 } from "./bands.js";
-import { MMOL, clock, fixed, mean, percent, pstdev } from "./numbers.js";
+import { clock } from "../../time.js";
+import { fixed, mean, percent, pstdev } from "../../numbers.js";
+import { MMOL } from "./units.js";
 
 /** A key, and the sentence that follows it. */
 export type Finding = readonly [key: string, text: string];

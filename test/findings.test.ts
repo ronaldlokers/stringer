@@ -12,10 +12,10 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 
-import type { Day, Reading } from "../src/glucose/bands.js";
-import { bandOf, hoursByBand, modalDay, timeInRange } from "../src/glucose/bands.js";
-import { findings, outliers } from "../src/glucose/findings.js";
-import { fixed } from "../src/glucose/numbers.js";
+import type { Day, Reading } from "../src/copy/glucose/bands.js";
+import { bandOf, hoursByBand, modalDay, timeInRange } from "../src/copy/glucose/bands.js";
+import { findings, outliers } from "../src/copy/glucose/findings.js";
+import { fixed } from "../src/numbers.js";
 
 const NAMES = ["ordinary", "spike", "low", "flat"] as const;
 
