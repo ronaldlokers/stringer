@@ -14,6 +14,8 @@
 
 import postgres from "postgres";
 
+import { withRetry } from "./retry.js";
+
 /** One connection, used once, closed. A beat runs for seconds and exits. */
 export async function reading<T>(
   url: string,
@@ -29,6 +31,16 @@ export async function reading<T>(
     onnotice: () => {},
   });
   try {
+    // The pod's first outbound connection is refused — see `retry.ts`, which
+    // measured it — and this is where every database beat made its first one.
+    // All three of them posted "could not read", every scheduled run, with
+    // `connect ECONNREFUSED` as the only evidence; the room got the apology
+    // and never the digest.
+    //
+    // A `select 1` rather than a warm-up against some other address: it costs
+    // one round trip, it proves the credential as well as the route, and by
+    // the time `work` runs the connection it needs is already open.
+    await withRetry(() => sql`SELECT 1`, { what: "postgres" });
     return await work(sql);
   } finally {
     await sql.end({ timeout: 5 });
