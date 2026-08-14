@@ -14,19 +14,55 @@
 import {
   BANDS,
   TARGET,
+  TARGET_HIGH,
+  TARGET_LOW,
   type Band,
   type Day,
+  type Reading,
   hourMeans,
   hoursByBand,
   timeInRange,
   valuesOf,
 } from "./bands.js";
 import { clock } from "../../time.js";
+import { READING_INTERVAL_MINUTES } from "./days.js";
 import { fixed, mean, percent, pstdev } from "../../numbers.js";
 import { MMOL } from "./units.js";
 
 /** A key, and the sentence that follows it. */
 export type Finding = readonly [key: string, text: string];
+
+/**
+ * The longest unbroken stretch in range, and where it started.
+ *
+ * Readings are five minutes apart, so a run is counted in readings and turned
+ * into hours at the end. A gap in the readings ends a run: an hour nobody
+ * measured is not an hour in range, which is the same rule the trace follows
+ * when it refuses to draw through a dropout.
+ */
+function longestRun(readings: readonly Reading[]): { hours: number; from: number } | null {
+  let best: { hours: number; from: number } | null = null;
+  let start: number | null = null;
+  let previous: number | null = null;
+  const flush = (end: number) => {
+    if (start === null) return;
+    const hours = (end - start) / 60;
+    if (!best || hours > best.hours) best = { hours, from: start };
+    start = null;
+  };
+  for (const [minute, value] of readings) {
+    const broken = previous !== null && minute - previous > READING_INTERVAL_MINUTES * 3;
+    if (value < TARGET_LOW || value > TARGET_HIGH || broken) {
+      flush(previous ?? minute);
+      if (value >= TARGET_LOW && value <= TARGET_HIGH) start = minute;
+    } else if (start === null) {
+      start = minute;
+    }
+    previous = minute;
+  }
+  flush(previous ?? 0);
+  return best;
+}
 
 /**
  * What a fortnight says about itself: a low, then a habitual bad hour, then a
@@ -212,6 +248,25 @@ export function outliers(days: readonly Day[], bands: readonly Band[] = BANDS): 
 
   if (out.length === 1 && out[0]![0] === "in range") {
     out.unshift(["nothing unusual", "yesterday sat inside its normal spread all day"]);
+  }
+
+  // The encouraging line, asked for twice and eaten by a redesign. Last, and
+  // after the check above rather than before it: pushed earlier it made `out`
+  // look non-trivial, and an entirely ordinary day stopped saying it was one.
+  // The golden fixture for a flat fortnight caught that.
+  //
+  // A fact rather than praise — the longest unbroken stretch in range and when
+  // it began. "Well done" every morning is worth nothing by the second week;
+  // the reader's own eleven hours is not.
+  const steady = longestRun(today.readings);
+  if (steady && steady.hours >= 4) {
+    out.push([
+      // Not "steady": the fortnight findings already use that key, and two
+      // findings with one name is how a sheet says the same word about two
+      // different facts.
+      "unbroken",
+      `${fixed(steady.hours, 0)} hours in range without a break, from ${clock(steady.from)}`,
+    ]);
   }
   return out;
 }

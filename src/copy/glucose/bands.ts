@@ -32,6 +32,16 @@ export interface Day {
   readonly readings: readonly Reading[];
 }
 
+/**
+ * The range itself, in mg/dL, named once.
+ *
+ * 70 and 180 appear in the band table, in timeInRange and in the sheet's
+ * target shading; three copies of a clinical threshold is three places to get
+ * it wrong.
+ */
+export const TARGET_LOW = 70;
+export const TARGET_HIGH = 180;
+
 /** 70% in range is the consensus target; the findings hang off it. */
 export const TARGET = 0.7;
 

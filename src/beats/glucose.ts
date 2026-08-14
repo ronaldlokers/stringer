@@ -27,6 +27,7 @@ import {
   type Entry,
 } from "../copy/glucose/days.js";
 import { renderDay, renderFortnight } from "../press/glucose/index.js";
+import { sensorFinding, sessionFrom } from "../copy/glucose/sensor.js";
 import { localDay, yesterday, type LocalDay } from "../time.js";
 import type { Round } from "../rounds.js";
 
@@ -84,8 +85,14 @@ export async function glucose(round: Round, environment = process.env): Promise<
     return;
   }
 
+  // How old the sensor is needs the raw readings and the holes between them,
+  // which the day model has already smoothed away — so it is computed here and
+  // handed to the sheet.
+  const sensor = sensorFinding(sessionFrom(entries, day.end));
+  const extra = sensor ? [sensor] : [];
+
   const weekly = wantsFortnight(day, environment);
-  const png = weekly ? renderFortnight(days, BANDS) : renderDay(days, BANDS);
+  const png = weekly ? renderFortnight(days, BANDS, extra) : renderDay(days, BANDS, extra);
   process.stdout.write(
     `${weekly ? "fortnight" : "day"} chart ${png.byteLength} bytes\n`,
   );

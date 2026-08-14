@@ -52,12 +52,28 @@ describe("the golden fortnights", () => {
         findings(days).map((finding) => [...finding]),
         want.findings,
       );
+      // "unbroken" is new, and deliberately so — the encouraging line the
+      // Python never had. Parity is asserted for everything it did produce,
+      // which is what these goldens are for; the new line has its own test
+      // below rather than being quietly folded into the recorded output.
       assert.deepEqual(
-        outliers(days).map((finding) => [...finding]),
+        outliers(days)
+          .filter(([key]) => key !== "unbroken")
+          .map((finding) => [...finding]),
         want.outliers,
       );
     });
   }
+
+  it("adds an encouraging line the Python never had", () => {
+    // A fact rather than praise: the longest unbroken stretch in range and
+    // when it began. "Well done" every morning is worth nothing by the second
+    // week; the reader's own eleven hours is not.
+    const found = outliers(fixture("fortnight-ordinary"));
+    const line = found.find(([key]) => key === "unbroken");
+    assert.ok(line, "no encouraging line: " + found.map(([k]) => k).join(", "));
+    assert.match(line![1], /hours in range without a break, from \d\d:\d\d/);
+  });
 
   it("leads with something different in each", () => {
     const leads = NAMES.map((name) => outliers(fixture(`fortnight-${name}`))[0]![0]);
@@ -175,5 +191,48 @@ describe("voice", () => {
         }
       }
     }
+  });
+});
+
+describe("how old the sensor is", () => {
+  // Coverage collapses on a predictable cycle. Saying "day 9" beforehand is the
+  // same information at the only moment it is useful.
+  const DAY = 86_400_000;
+  const NOW = Date.parse("2026-08-14T08:00:00Z");
+
+  function readings(fromDaysAgo: number, gapAt?: number): { at: number; mgdl: number }[] {
+    const out: { at: number; mgdl: number }[] = [];
+    for (let minute = fromDaysAgo * 1440; minute >= 0; minute -= 5) {
+      const at = NOW - minute * 60_000;
+      if (gapAt !== undefined && minute < gapAt * 1440 && minute > gapAt * 1440 - 120) continue;
+      out.push({ at, mgdl: 110 });
+    }
+    return out;
+  }
+
+  it("counts from the last gap long enough to be a sensor change", async () => {
+    const { sessionFrom, sensorFinding } = await import("../src/copy/glucose/sensor.js");
+    const session = sessionFrom(readings(14, 9), NOW);
+    assert.equal(session?.exact, true);
+    assert.equal(session?.days, 8);
+    assert.match(sensorFinding(session)![1], /on day 8, counting from the last gap/);
+  });
+
+  it("says 'at least' when the readings hold no gap at all", async () => {
+    const { sessionFrom, sensorFinding } = await import("../src/copy/glucose/sensor.js");
+    const session = sessionFrom(readings(14), NOW);
+    assert.equal(session?.exact, false);
+    assert.match(sensorFinding(session)![1], /at least day 14 — no gap/);
+  });
+
+  it("stays quiet for the first week, when it is not news", async () => {
+    const { sessionFrom, sensorFinding } = await import("../src/copy/glucose/sensor.js");
+    assert.equal(sensorFinding(sessionFrom(readings(3), NOW)), null);
+  });
+
+  it("ignores a gap short enough to be a shower", async () => {
+    const { sessionFrom } = await import("../src/copy/glucose/sensor.js");
+    const entries = readings(14).filter((_, index) => index % 200 !== 0);
+    assert.equal(sessionFrom(entries, NOW)?.exact, false);
   });
 });

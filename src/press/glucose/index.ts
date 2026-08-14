@@ -3,6 +3,7 @@
 import { Resvg } from "@resvg/resvg-js";
 
 import type { Band, Day } from "../../copy/glucose/bands.js";
+import type { Finding } from "../../copy/glucose/findings.js";
 import { WIDTH } from "../tokens.js";
 import { daySheet, fortnightSheet } from "./sheets.js";
 
@@ -16,10 +17,18 @@ function rasterise(svg: string): Uint8Array {
   return resvg.render().asPng();
 }
 
-export function renderFortnight(days: readonly Day[], bands?: readonly Band[]): Uint8Array {
-  return rasterise(fortnightSheet(days, bands));
+export function renderFortnight(
+  days: readonly Day[],
+  bands?: readonly Band[],
+  extra?: readonly Finding[],
+): Uint8Array {
+  return rasterise(fortnightSheet(days, bands, extra));
 }
 
-export function renderDay(days: readonly Day[], bands?: readonly Band[]): Uint8Array {
-  return rasterise(daySheet(days, bands));
+export function renderDay(
+  days: readonly Day[],
+  bands?: readonly Band[],
+  extra?: readonly Finding[],
+): Uint8Array {
+  return rasterise(daySheet(days, bands, extra));
 }
