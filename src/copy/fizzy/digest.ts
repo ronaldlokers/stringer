@@ -13,6 +13,17 @@ import { days, oldest, type Board, type Card } from "./board.js";
 /** Three of anything is a list; ten is a backlog nobody reads in a chat room. */
 const SHOWN = 3;
 
+/**
+ * Where this came from.
+ *
+ * Almanac posts everything — sheets, findings, records — so a message that
+ * opens with a board's name says nothing about what it is, and "Campfire" is
+ * the name of both a board and the room it arrives in. The sheets carry a
+ * source line for the same reason; this is that line, in a message with no
+ * sheet to put it on.
+ */
+const SOURCE = "📋 the boards · fizzy";
+
 export function renderDigest(boards: readonly Board[], now: number): string | null {
   const parts: string[] = [];
 
@@ -50,11 +61,11 @@ export function renderDigest(boards: readonly Board[], now: number): string | nu
     }
 
     if (lines.length) {
-      parts.push(heading(`📋 ${escape(board.name)}`), bullets(lines));
+      parts.push(heading(escape(board.name)), bullets(lines));
     }
   }
 
-  return parts.length ? parts.join("") : null;
+  return parts.length ? heading(SOURCE) + parts.join("") : null;
 }
 
 /** Everything the digest would mention, for the log line. */
