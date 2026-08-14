@@ -59,6 +59,7 @@ docker run --rm -e DIGEST_DATE=2026-03-29 ghcr.io/ronaldlokers/stringer:latest h
 | `speedtest` | the week's connection against what it is sold as; Sundays | shipped |
 | `reading` | which feeds publish more than you read; Sundays | shipped |
 | `security` | authentik's events, when any of them matter; hourly | shipped |
+| `storage` | what is growing and how long the disks have left; Sundays | shipped |
 | `status` | answers `@Houston status` and its siblings; long-running | shipped |
 
 ## Working on it
