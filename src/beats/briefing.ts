@@ -20,6 +20,7 @@ import {
 import { checkBackups, checkCerts, checkFlux, checkPods, checkVolumes } from "../copy/cluster/checks.js";
 import { budget, Kube } from "../copy/cluster/kube.js";
 import { checkSecretRefs } from "../copy/cluster/secrets.js";
+import { needsAttention } from "../copy/mention.js";
 import {
   checkDiskHeadroom,
   checkNodeCerts,
@@ -129,5 +130,11 @@ export async function briefing(round: Round, environment = process.env): Promise
     process.stdout.write("filed through the bridge\n");
     return;
   }
-  await round.say(body);
+  // Problems wake someone; an overnight alert that has already resolved, or a
+  // check that could not run, does not. The briefing arrives at 07:00 either
+  // way — the mention only decides whether it arrives *at* you.
+  //
+  // A briefing filed through the bridge is mentioned there instead: the sgid
+  // belongs to the cluster that holds the room, and staging has neither.
+  await round.say(problems.length ? needsAttention(body, environment.CAMPFIRE_MENTION_SGID) : body);
 }

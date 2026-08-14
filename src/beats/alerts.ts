@@ -15,6 +15,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { Groups, hasEscalated } from "../copy/alerts/groups.js";
 import { renderBriefing, type Briefing } from "../copy/cluster/briefing.js";
 import { Reported, renderCheck, renderClear, type Check } from "../copy/cluster/check.js";
+import { needsAttention } from "../copy/mention.js";
 import {
   firingFingerprints,
   render,
@@ -54,6 +55,9 @@ export async function alerts(_unused: Round, environment = process.env): Promise
 }
 
 export async function listen(environment: NodeJS.ProcessEnv): Promise<Bridge> {
+  // Who to wake, and only for the messages that warrant it. Unset, everything
+  // still posts and nothing notifies in a mentions-only room.
+  const sgid = environment.CAMPFIRE_MENTION_SGID?.trim();
   // One destination per source, each its own room. Gatus is absent on purpose:
   // its `custom` alerting provider templates its own body, so it posts directly
   // and needs nothing here.
@@ -87,7 +91,7 @@ export async function listen(environment: NodeJS.ProcessEnv): Promise<Bridge> {
   }
 
   const server = createServer((request, response) => {
-    void handle(request, response, destinations, groups, reported, silencing);
+    void handle(request, response, destinations, groups, reported, silencing, sgid);
   });
 
   const port = Number(environment.LISTEN_PORT ?? "8080");
@@ -112,6 +116,7 @@ async function handle(
   groups: Groups,
   reported: Reported,
   silencing: Silencing,
+  sgid?: string,
 ): Promise<void> {
   const path = (request.url ?? "").split("?")[0]!;
 
@@ -154,14 +159,19 @@ async function handle(
     if (path === "/alerts") {
       // Alerts have a life beyond one message: the same group is amended as
       // its members resolve. Flux events are one-shot.
-      const what = await deliverAlerts(round, groups, payload as AlertPayload, silencing);
+      const what = await deliverAlerts(round, groups, payload as AlertPayload, silencing, sgid);
       const count = (payload as AlertPayload).alerts?.length ?? 0;
       process.stdout.write(`/alerts: ${count} alert(s), ${what}\n`);
     } else if (path === "/briefing") {
       // Data in, markup out. The sender ships what it found and this renders
       // it, same as the other two paths — which is what keeps a LAN-only
       // ingress from also being a way to post arbitrary HTML into a room.
-      const html = renderBriefing(asBriefing(payload));
+      const briefing = asBriefing(payload);
+      const rendered = renderBriefing(briefing);
+      const html =
+        rendered !== null && briefing.problems.length
+          ? needsAttention(rendered, sgid)
+          : rendered;
       if (html === null) {
         // A briefing with nothing in it is not an error; it is the state this
         // whole beat exists to produce. Accept it and say nothing.
@@ -176,11 +186,17 @@ async function handle(
       // in each check keeps the state in one process instead of two scripts,
       // and keeps a check to the one thing it is good at.
       const report = asCheck(payload);
-      const what = await deliverCheck(round, reported, report);
+      const what = await deliverCheck(round, reported, report, sgid);
       process.stdout.write(`/check: ${report.check}: ${what}\n`);
     } else {
-      await round.say(renderFlux(payload as FluxPayload));
-      process.stdout.write("/flux: published 1 event(s)\n");
+      // Flux is chatty and mostly fine: a reconciliation that succeeded is a
+      // record, and only a failure is worth a notification.
+      const event = payload as FluxPayload;
+      const failed = String(event.severity ?? "").toLowerCase() === "error";
+      await round.say(
+        failed ? needsAttention(renderFlux(event), sgid) : renderFlux(event),
+      );
+      process.stdout.write(`/flux: published 1 event(s)${failed ? ", mentioned" : ""}\n`);
     }
     response.writeHead(200);
   } catch (error) {
@@ -197,9 +213,14 @@ export async function deliverAlerts(
   groups: Groups,
   payload: AlertPayload,
   silencing: Silencing,
+  sgid?: string,
 ): Promise<string> {
-  const html = render(payload, silencing);
-  if (html === null) return "nothing to say";
+  const rendered = render(payload, silencing);
+  if (rendered === null) return "nothing to say";
+  // Firing wakes someone; resolved does not. A resolution is good news, and
+  // good news at 3am is still 3am.
+  const isFiring = payload.status !== "resolved";
+  const html = isFiring ? needsAttention(rendered, sgid) : rendered;
 
   const groupKey = payload.groupKey;
   const firing = firingFingerprints(payload);
@@ -234,10 +255,12 @@ export async function deliverCheck(
   round: Round,
   reported: Reported,
   report: Check,
+  sgid?: string,
 ): Promise<string> {
   const verdict = reported.decide(report);
   if (verdict === "post") {
-    await round.say(renderCheck(report)!);
+    // Findings notify; the clear that follows does not.
+    await round.say(needsAttention(renderCheck(report)!, sgid));
     reported.remember(report);
     return `${report.findings.length} finding(s) posted`;
   }
