@@ -16,6 +16,7 @@ import { memories } from "./beats/memories.js";
 import { renovate } from "./beats/renovate.js";
 import { speedtest } from "./beats/speedtest.js";
 import { status } from "./beats/status.js";
+import { storage } from "./beats/storage.js";
 import { roundFrom } from "./rounds.js";
 import type { Round } from "./rounds.js";
 
@@ -29,6 +30,7 @@ const BEATS: Record<string, (round: Round) => Promise<void>> = {
   renovate,
   speedtest,
   status,
+  storage,
 };
 
 async function main(): Promise<number> {
