@@ -111,6 +111,79 @@ middle, findings, ruled foot with four exact figures.
   middle half of the preceding days, so a departure is the line leaving the
   band. Then the day as counted hours, keeping both sheets in one language.
 
+## The second tenant: speedtest
+
+The press was built for one beat, so its "house style" was really one sheet's
+style until something else printed on it. Speedtest is that test, and
+**`tokens.ts` survived it unchanged** — ground, ink, faces, type scale and
+canvas all held. What the sheet needed was its own `palette.ts` and `layout.ts`,
+which is exactly the split this file claims. The house style is a house style.
+
+One thing did not carry over. The glucose palette's rule that *warm reads high*
+is meaningless here, where high is the good end; reusing it would have amber
+meaning opposite things on two sheets from the same press. So the speedtest ramp
+encodes **shortfall against what the line was sold as** — green at 90% or better
+of the plan, then olive, amber, and red furthest from it. What survives is the
+part that matters: green still means "as it should be".
+
+Composition is the same skeleton — source line, rule, headline finding, the
+middle, findings, ruled foot with four figures. The middle is one field: both
+directions traced over the week against the line the plan promises, from nothing
+to the plan plus 8% of headroom so that line sits *inside* the field and can be
+read. The extent is never fitted to the week — what is being read is the
+distance between the trace and the top, so the top has to mean the same thing
+every Sunday.
+
+Two traces on one field rather than a sheet each, because the gap between them
+is the finding a symmetric plan hides. The first real week read 93% down and
+61% up.
+
+Only tests adjacent in time are joined; an hour with no test is a break in the
+line, not a straight segment through a speed nobody measured. Same rule as the
+glucose trace.
+
+Under it, a second and shorter field: **ping, with the middle half of the week
+shaded**. A latency figure has no reference except its own habit — 9 ms is not
+high or low, it is high or low *for this line* — which is the same argument the
+glucose day sheet makes by shading the middle half of the preceding days.
+
+### One field fixed, the other fitted
+
+The two plots scale differently, and the difference is the point rather than an
+inconsistency.
+
+The speeds are drawn from **zero to the plan**, always. What is being read there
+is the distance between the trace and a number on a bill, so the floor and the
+ceiling have to mean the same thing every Sunday.
+
+Ping is drawn **fitted to the week**. It is measured against nothing external,
+so from zero a good week is a flat line with the typical band a sliver six
+pixels tall — the variation, which is the only thing there is to read, disappears
+into the axis. Fitted, a spike leaves the band and the eye lands on it.
+
+The band carries no axis labels: on a good week its edges are half a millisecond
+apart, and two labels there overlap each other. The caption states both figures
+("ping, usually 8.0 to 8.5 ms") and the worst test of the week is named where it
+happened.
+
+### Two versions this replaced
+
+**One filled bar per test, against the plan.** Built first, cut on looking at a
+rendered week: from zero to a gigabit, a good week is 168 bars all within a few
+percent of the top, which is a solid block of colour where the eye estimates
+shading — the heatmap this design refuses for glucose.
+
+**Counted rows, fourteen of them.** Seven days down and seven days up, one mark
+per test, sorted worst last so the length of the green run was the number of
+hours delivered as sold. Strictly the more Vienna answer, and it read well.
+Replaced at the reader's request: on this subject he wants the *shape* of the
+week — where the notches fell — rather than its tally. What the rows carried
+survives in the two traces sharing one field.
+
+The lesson worth keeping is that the Vienna Method is the house's default, not
+its law. A tally answers "how much"; a trace answers "when". Glucose asks the
+first question and speedtest asks the second.
+
 ## Voice
 
 Findings describe the reader's own data and never instruct. "The 08:00 hour ran
