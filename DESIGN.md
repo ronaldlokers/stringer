@@ -211,6 +211,64 @@ than in the findings block, which draws two findings and would drop it every
 day. It is a fact rather than praise: the longest unbroken stretch in range and
 when it began. "Well done" every morning is worth nothing by the second week.
 
+## The third tenant: uptime
+
+Monthly, on the 1st. `tokens.ts` survived a third beat unchanged, which is now
+enough repetitions to stop calling it a coincidence.
+
+The middle is **counted rows again** — a row per service, a mark per day — and
+this is the sheet where the Vienna Method earns its place rather than inherits
+it. A tally answers "how much", and uptime is a how-much question asked thirty
+times per service. The length of the green run is how long that service went
+without failing a check, which is the number a reader wants and no dashboard
+states.
+
+Reading *down* a column answers the other question for free: a vertical stripe
+of amber is the day the cluster wobbled, visibly one event rather than
+seventeen misfortunes. That is precisely what the per-endpoint percentages
+hide — ten services reading 98.3% is almost always one bad twenty minutes they
+all sat through — and it is why this is a grid and not seventeen bars.
+
+Bars from 0 to 100% were refused for the reason already recorded against the
+speedtest sheet's first version: everything sits within a few percent of the
+top, so it is a block of colour where the eye estimates shading.
+
+**Green is a day on which every check was answered**, not a day that was mostly
+fine. The ordinary day here is a perfect one, so a green that also covered
+99.6% would make the sheet an unbroken field with the interesting days hidden
+inside it. One failed check in 1,440 moves a day off green — deliberately.
+
+### The window is thirty days, and says so
+
+Gatus keeps hourly rows for 48 hours, merges older ones into daily buckets, and
+deletes anything past thirty days (`uptimeHourlyBuffer`, `uptimeRetention`,
+`uptimeAgeCleanUpThreshold`). So a review posted on the 1st **cannot** see the
+1st of the month before it — that day is thirty-one days old and already gone.
+
+A sheet headed "July" that quietly omitted July's first days would be the kind
+of lie the rest of this file exists to prevent, so the source line states the
+window that was found: "uptime, 20 days · gatus".
+
+The merge costs nothing for the totals — a day's totals are a day's totals
+however many rows they arrive in — but it destroys intra-day timing. So the
+percentages come from `endpoint_uptimes` and are exact, while outage timing
+comes from `endpoint_events`, which gatus caps *by count* per endpoint. Timing
+is best-effort; the numbers are not, and the sheet never mixes them up.
+
+### The grid takes what is left
+
+Both ends of this sheet are computed sentences. The first version fixed the
+grid's band and let the finding fall where it may: a three-line headline pushed
+the rows down, the finding ran into the foot, and the overrun rule dropped it —
+a sheet silently missing the one line that explains its own picture, which is
+the same bug DESIGN.md already records twice under "findings never overrun the
+figures".
+
+So the order is inverted here. The finding is measured first and sits directly
+above the foot; room for the two date labels is reserved; the rows take what
+remains, thinning as far as they must. A minimum row height was the mechanism
+that pushed the axis off the sheet, so there is not one.
+
 ## Voice
 
 Findings describe the reader's own data and never instruct. "The 08:00 hour ran
