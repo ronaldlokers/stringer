@@ -39,12 +39,12 @@ export function findings(days: readonly Day[], plan: Plan): Finding[] {
   const typical = median(downs);
   const out: Finding[] = [];
 
-  // The figure first, the share of the plan second. "93% of the gigabit
-  // arrived" leads with a ratio and reads like a translation; the speed is the
-  // thing, and what it is a share of is the context for it.
+  // Both numbers, one unit, no ratio: "93% of the gigabit" makes the reader
+  // hold a percentage and a noun at once, and is not how anyone says this out
+  // loud. Two figures side by side make the comparison themselves.
   out.push([
-    `${fixed(megabits(typical), 0)} Mbps`,
-    `down on a typical test, ${percent(share(typical, plan.down))}% of the ${headline(plan.down)}`,
+    `${fixed(megabits(typical), 0)}`,
+    `of the ${fixed(megabits(plan.down), 0)} Mbps you pay for, on a typical test`,
   ]);
 
   /**
@@ -80,9 +80,13 @@ export function findings(days: readonly Day[], plan: Plan): Finding[] {
   weighted.push([
     1 - share(typicalUp, plan.up),
     [
-      `${fixed(megabits(typicalUp), 0)} Mbps`,
-      `up on a typical test, ${percent(share(typicalUp, plan.up))}% of the ${headline(plan.up)} ` +
-        "the plan sells in that direction",
+      `${fixed(megabits(typicalUp), 0)} up`,
+      // "the same N" only where it is the same number. On an asymmetric plan
+      // that phrasing would quietly claim a symmetry the bill never sold.
+      plan.up === plan.down
+        ? `against the same ${fixed(megabits(plan.up), 0)} in the other direction, ` +
+          "on a typical test"
+        : `against the ${fixed(megabits(plan.up), 0)} Mbps sold upward, on a typical test`,
     ],
   ]);
 
@@ -111,11 +115,3 @@ export function findings(days: readonly Day[], plan: Plan): Finding[] {
   return out;
 }
 
-/**
- * The plan as it is sold: "gigabit" rather than "1000 Mbps" where it happens to
- * be one, because that is the word on the bill.
- */
-function headline(bits: number): string {
-  if (bits === 1_000_000_000) return "gigabit";
-  return `${fixed(megabits(bits), 0)} Mbps`;
-}

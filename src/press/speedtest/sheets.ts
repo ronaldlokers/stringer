@@ -223,8 +223,9 @@ function planFigure(bits: number): string {
   return `${fixed(megabits(bits), 0)}`;
 }
 
+/** What the plot is measured against, in the words the findings use. */
 function planWord(bits: number): string {
-  return bits === 1_000_000_000 ? "gigabit it is sold as" : `${fixed(megabits(bits), 0)} Mbps sold`;
+  return `${fixed(megabits(bits), 0)} Mbps you pay for`;
 }
 
 function document(body: string): string {

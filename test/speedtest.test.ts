@@ -90,12 +90,19 @@ describe("the bands are shortfall, not speed", () => {
 });
 
 describe("the sentences", () => {
-  it("leads with the speed, then what share of the plan that is", () => {
-    // "93% of the gigabit arrived" leads with a ratio and reads like a
-    // translation. The speed is the thing; the share is context for it.
+  it("puts the two figures side by side rather than reporting a ratio", () => {
+    // "93% of the gigabit" makes the reader hold a percentage and a noun at
+    // once, and is not how anyone says this out loud.
     const [[key, sentence]] = findings(week(), GIGABIT) as [[string, string]];
-    assert.equal(key, "940 Mbps");
-    assert.match(sentence, /down on a typical test, 94% of the gigabit/);
+    assert.equal(key, "940");
+    assert.equal(sentence, "of the 1000 Mbps you pay for, on a typical test");
+  });
+
+  it("says what the plan is rather than naming it, so any plan reads the same", () => {
+    const hundred = { down: 100_000_000, up: 40_000_000 };
+    const [[key, sentence]] = findings(week(24, 95), hundred) as [[string, string]];
+    assert.equal(key, "95");
+    assert.match(sentence, /of the 100 Mbps you pay for/);
   });
 
   it("says so plainly when every test held", () => {
@@ -113,7 +120,10 @@ describe("the sentences", () => {
 
   it("reports upload against the direction the plan sells it in", () => {
     const said = findings(week(), GIGABIT).map(([key, sentence]) => `${key} ${sentence}`);
-    assert.ok(said.some((line) => /780 Mbps up on a typical test, 78% of the gigabit/.test(line)));
+    assert.ok(
+      said.some((line) => /780 up against the same 1000 in the other direction/.test(line)),
+      said.join(" | "),
+    );
   });
 
   it("counts the hours it could not count", () => {
@@ -132,7 +142,8 @@ describe("the sentences", () => {
     }));
     days[3] = { ...days[3]!, tests: [...days[3]!.tests.slice(1), test(999, 880, 610)] };
     const [, second] = findings(days, GIGABIT);
-    assert.match(second![1], /up on a typical test/);
+    assert.match(second![0], /up$/);
+    assert.match(second![1], /in the other direction/);
   });
 
   it("keeps the ping last, however stable it is", () => {
