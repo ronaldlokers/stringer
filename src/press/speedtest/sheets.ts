@@ -15,12 +15,19 @@
  */
 
 import { findings, type Finding } from "../../copy/speedtest/findings.js";
-import { median, megabits, tests, type Day, type Plan } from "../../copy/speedtest/week.js";
+import {
+  median,
+  megabits,
+  quantile,
+  tests,
+  type Day,
+  type Plan,
+} from "../../copy/speedtest/week.js";
 import { fixed } from "../../numbers.js";
 import { GRID, GROUND, HEIGHT, INK, MARGIN, MUTED, RULE, WIDTH } from "../tokens.js";
 import { polyline, rect, text, width, wrap } from "../svg.js";
 import { LAYOUT } from "./layout.js";
-import { BAND_COLOUR, PLAN_LINE, PLOT_FILL } from "./palette.js";
+import { BAND_COLOUR, PING_LINE, PLAN_LINE, PLOT_FILL, TYPICAL_FILL } from "./palette.js";
 
 const MEASURE = WIDTH - 2 * MARGIN;
 
@@ -37,7 +44,12 @@ export function weekSheet(days: readonly Day[], plan: Plan): string {
   // knowable when the layout is written. The plot follows it rather than
   // sitting at a fixed height a three-line headline draws straight through.
   parts.push(theWeek(days, plan, Math.max(LAYOUT.plot.caption, head.bottom + 46)));
-  parts.push(findingBlock(found.slice(1, 3), LAYOUT.findings));
+  parts.push(theLatency(days));
+  // One finding rather than two: the latency field took the room the second
+  // one used, and a finding drawn over the foot is worse than a finding
+  // dropped. They arrive in order of consequence, so the one kept is the one
+  // that matters most.
+  parts.push(findingBlock(found.slice(1, 2), LAYOUT.findings));
   parts.push(foot(days, plan));
   return document(parts.join(""));
 }
@@ -131,15 +143,87 @@ function theWeek(days: readonly Day[], plan: Plan, caption: number): string {
   // Named at the right-hand end, where each line finishes, rather than in a
   // legend the eye has to carry back to the plot.
   const lastTest = all[all.length - 1]!;
+  for (const [value, ceiling, label, colour] of [
+    [lastTest.down, plan.down, "down", BAND_COLOUR.full],
+    [lastTest.up, plan.up, "up", BAND_COLOUR.half],
+  ] as const) {
+    // Below the line's end, always. Above it puts the download label on the
+    // plan rule every good week, which is where it was being struck through.
+    out.push(
+      text(left + MEASURE, y(value, ceiling) + 30, "small", label, colour, { anchor: "end" }),
+    );
+  }
+  return out.join("");
+}
+
+/**
+ * Ping over the week, against the range it usually sits in.
+ *
+ * The band is the middle half of this week's own tests, which is the only
+ * reference a latency figure has: 9 ms is not high or low, it is high or low
+ * *for this line*. The glucose sheets shade the middle half of the preceding
+ * days for exactly that reason.
+ *
+ * Scaled from zero, so the band's distance from the floor is the latency and
+ * not an artefact of where the axis was cropped. A spike leaves the band
+ * upward, which is the one thing to look for.
+ */
+function theLatency(days: readonly Day[]): string {
+  const { caption, top, bottom } = LAYOUT.latency;
+  const left = MARGIN;
+  const all = tests(days);
+  const out: string[] = [rect(left, top, MEASURE, bottom - top, PLOT_FILL)];
+  if (!all.length) {
+    return (
+      text(left, caption, "body", "ping, over the week", INK) + out.join("")
+    );
+  }
+
+  const pings = all.map((test) => test.ping);
+  const low = quantile(pings, 0.25);
+  const high = quantile(pings, 0.75);
+  const worst = Math.max(...pings);
+  const best = Math.min(...pings);
+
+  // Unlike the speeds, this field is fitted to the week rather than drawn from
+  // zero. The speeds are read against a number on a bill, so their floor has to
+  // be fixed; a ping has no such number, and from zero a good week is a flat
+  // line with the typical band a sliver six pixels tall. What is being read
+  // here is the variation, so the variation is what the field is scaled to.
+  const pad = Math.max((worst - best) * 0.18, 0.15);
+  const floor = Math.max(0, best - pad);
+  const ceiling = worst + pad;
+  const start = all[0]!.at;
+  const span = Math.max(all[all.length - 1]!.at - start, 1);
+  const x = (at: number): number => left + ((at - start) / span) * MEASURE;
+  const y = (value: number): number =>
+    bottom -
+    Math.max(0, Math.min(1, (value - floor) / Math.max(ceiling - floor, 0.01))) * (bottom - top);
+
   out.push(
-    text(left + MEASURE, y(lastTest.down, plan.down) - 14, "small", "down", BAND_COLOUR.full, {
-      anchor: "end",
-    }),
+    text(
+      left,
+      caption,
+      "body",
+      `ping, usually ${fixed(low, 1)} to ${fixed(high, 1)} ms`,
+      INK,
+    ),
   );
+  // No axis labels on the band: its edges are 0.5 ms apart on a good week, so
+  // two labels there overlap each other. The caption carries both numbers, and
+  // the shape is what the field is for.
+  out.push(rect(left, y(high), MEASURE, Math.max(y(low) - y(high), 2), TYPICAL_FILL));
+  out.push(...trace(all.map((test) => [x(test.at), y(test.ping)] as const), PING_LINE));
+  // The worst of the week, named where it happened rather than in a footnote.
+  const spike = all.reduce((a, b) => (a.ping > b.ping ? a : b));
   out.push(
-    text(left + MEASURE, y(lastTest.up, plan.up) - 14, "small", "up", BAND_COLOUR.half, {
-      anchor: "end",
-    }),
+    text(
+      Math.min(x(spike.at) + 10, left + MEASURE - width("small", `${fixed(worst, 1)} ms`) - 4),
+      Math.max(y(worst) - 10, top + 22),
+      "small",
+      `${fixed(worst, 1)} ms`,
+      MUTED,
+    ),
   );
   return out.join("");
 }

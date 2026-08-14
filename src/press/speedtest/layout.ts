@@ -29,8 +29,16 @@ export const LAYOUT = {
    * field. That is a solid block of colour where the eye estimates shading; two
    * lines encode by position, which the eye reads exactly.
    */
-  plot: { caption: 288, top: 312, bottom: 852, axis: 40 },
-  findings: 900,
+  plot: { caption: 288, top: 312, bottom: 700, axis: 40 },
+  /**
+   * Ping, under the speeds, with the middle half of the week shaded.
+   *
+   * Its own field rather than a second trace on the one above: milliseconds and
+   * megabits share no axis, and drawing them together would either flatten the
+   * ping into the floor or invent a second scale nobody asked to read.
+   */
+  latency: { caption: 736, top: 758, bottom: 872 },
+  findings: 912,
   findingStep: 70,
   foot: 1060,
 } as const;

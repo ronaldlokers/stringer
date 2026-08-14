@@ -29,6 +29,15 @@ export const MISSED_COLOUR = "#c4beb0";
 export const PLOT_FILL = "#ded9cd";
 
 /**
+ * The middle half of the week's pings: the range a spike is judged against.
+ *
+ * The glucose sheets shade the middle half of the preceding days the same way,
+ * and for the same reason — a number is only high relative to what is usual.
+ */
+export const TYPICAL_FILL = "#c9c3b4";
+export const PING_LINE = "#4a6670";
+
+/**
  * The line the plan promises, and the floor the plot draws down to.
  *
  * The extent is fixed rather than fitted to the week: a week where everything

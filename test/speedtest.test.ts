@@ -255,3 +255,28 @@ describe("median", () => {
     assert.ok(Number.isNaN(median([])));
   });
 });
+
+describe("the latency field", () => {
+  it("shades the middle half of the week", () => {
+    const days = week();
+    days[2] = { ...days[2]!, tests: days[2]!.tests.map((t) => ({ ...t, ping: 24 })) };
+    const svg = weekSheet(days, GIGABIT);
+    assert.match(svg, /ping, usually 7\.0 to 7\.0 ms|ping, usually [\d.]+ to [\d.]+ ms/);
+    assert.match(svg, /#c9c3b4/, "the typical band should be drawn");
+  });
+
+  it("names the worst ping of the week", () => {
+    const days = week();
+    days[4] = {
+      ...days[4]!,
+      tests: [...days[4]!.tests.slice(1), { at: 999, down: 940 * MB, up: 780 * MB, ping: 31.4 }],
+    };
+    assert.match(weekSheet(days, GIGABIT), />31\.4 ms</);
+  });
+
+  it("survives a week where every ping is identical", () => {
+    // A fitted field divides by the spread, and a flat week's spread is zero.
+    const svg = weekSheet(week(), GIGABIT);
+    assert.doesNotMatch(svg, /NaN|Infinity/);
+  });
+});

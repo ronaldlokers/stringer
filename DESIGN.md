@@ -142,6 +142,30 @@ Only tests adjacent in time are joined; an hour with no test is a break in the
 line, not a straight segment through a speed nobody measured. Same rule as the
 glucose trace.
 
+Under it, a second and shorter field: **ping, with the middle half of the week
+shaded**. A latency figure has no reference except its own habit — 9 ms is not
+high or low, it is high or low *for this line* — which is the same argument the
+glucose day sheet makes by shading the middle half of the preceding days.
+
+### One field fixed, the other fitted
+
+The two plots scale differently, and the difference is the point rather than an
+inconsistency.
+
+The speeds are drawn from **zero to the plan**, always. What is being read there
+is the distance between the trace and a number on a bill, so the floor and the
+ceiling have to mean the same thing every Sunday.
+
+Ping is drawn **fitted to the week**. It is measured against nothing external,
+so from zero a good week is a flat line with the typical band a sliver six
+pixels tall — the variation, which is the only thing there is to read, disappears
+into the axis. Fitted, a spike leaves the band and the eye lands on it.
+
+The band carries no axis labels: on a good week its edges are half a millisecond
+apart, and two labels there overlap each other. The caption states both figures
+("ping, usually 8.0 to 8.5 ms") and the worst test of the week is named where it
+happened.
+
 ### Two versions this replaced
 
 **One filled bar per test, against the plan.** Built first, cut on looking at a

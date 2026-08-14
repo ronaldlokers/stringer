@@ -79,6 +79,23 @@ export function median(values: readonly number[]): number {
   return sorted.length % 2 ? sorted[middle]! : (sorted[middle - 1]! + sorted[middle]!) / 2;
 }
 
+/**
+ * The value at a quantile, interpolating between neighbours.
+ *
+ * Used for the middle half of a week's pings — the band a reader compares a
+ * spike against. Nearest-rank would step in visible jumps on a week where most
+ * tests return the same few tenths of a millisecond.
+ */
+export function quantile(values: readonly number[], q: number): number {
+  if (!values.length) return NaN;
+  const sorted = [...values].sort((a, b) => a - b);
+  const at = (sorted.length - 1) * q;
+  const low = Math.floor(at);
+  const high = Math.ceil(at);
+  if (low === high) return sorted[low]!;
+  return sorted[low]! + (sorted[high]! - sorted[low]!) * (at - low);
+}
+
 export function tests(days: readonly Day[]): Test[] {
   return days.flatMap((day) => [...day.tests]);
 }
