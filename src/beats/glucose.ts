@@ -33,8 +33,12 @@ import type { Round } from "../rounds.js";
 /** Fourteen days is the clinical convention for a stable time-in-range figure. */
 const HISTORY_DAYS = 14;
 const TIMEOUT_MS = 20_000;
-/** The first connection from a new pod can be refused while its NetworkPolicy
- *  is still being programmed; the symptom is one refusal and then success. */
+/**
+ * The first connection from a fresh pod to a cross-namespace destination is
+ * refused, and the next succeeds. Measured, not assumed — and it is not the
+ * pod's own policy being written late, which is what this comment used to say.
+ * See src/retry.ts.
+ */
 const ATTEMPTS = 3;
 const RETRY_MS = 5_000;
 
