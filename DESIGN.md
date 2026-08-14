@@ -193,11 +193,18 @@ and a line beneath the block reads "this week 94% · the week before 83% · up
 10". Drawn at the right edge of each week instead, it collided with that day's
 own percentage — "85%94%", two true numbers and one unreadable sheet.
 
-**The sensor's age**, on both sheets, from day 8 onward. Coverage collapses on
-a predictable cycle, and the digest has always reported that afterwards as a
-day with withheld statistics. Sessions are inferred from gaps of 90 minutes or
-more — above a lost phone, below a warm-up — and when the window holds no gap
-the sheet says "at least day 14" rather than claiming a number it cannot see.
+**The sensor's age**, on both sheets, in the last three days of its life —
+"day 8 of 10, due in 2 days". Coverage collapses on a predictable cycle, and
+the digest has always reported that afterwards as a day with withheld
+statistics.
+
+Nightscout answers this itself when the uploader records a `Sensor Start`
+treatment, which is what the site's own SAGE pill reads, and this instance has
+them. So that is the source. Gaps of 90 minutes or more — above a lost phone,
+below a warm-up — are the fallback for an instance without them, and a gap
+*after* a recorded start wins, because that means a sensor was changed and
+nobody wrote it down. Ten days is the Dexcom ONE+ figure and lives in one
+constant.
 
 **The encouraging line**, on the hour-marks caption of the daily sheet rather
 than in the findings block, which draws two findings and would drop it every

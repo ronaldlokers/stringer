@@ -85,10 +85,12 @@ export async function glucose(round: Round, environment = process.env): Promise<
     return;
   }
 
-  // How old the sensor is needs the raw readings and the holes between them,
-  // which the day model has already smoothed away — so it is computed here and
-  // handed to the sheet.
-  const sensor = sensorFinding(sessionFrom(entries, day.end));
+  // How old the sensor is: Nightscout's own answer when the uploader records
+  // one, the holes in the readings when it does not. Either way it needs the
+  // raw entries, which the day model has already smoothed away, so it is
+  // computed here and handed to the sheet.
+  const started = await sensorStart(base, secret).catch(() => undefined);
+  const sensor = sensorFinding(sessionFrom(entries, day.end, started));
   const extra = sensor ? [sensor] : [];
 
   const weekly = wantsFortnight(day, environment);
@@ -196,4 +198,26 @@ function shortfall(day: LocalDay, count: number, expected: number, zone: string)
 
 function escape(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/**
+ * When Nightscout says the current sensor began.
+ *
+ * `Sensor Start` is the treatment the site's own SAGE pill reads, and it exists
+ * only if whatever uploads readings also writes it. Absent, this returns
+ * nothing and the age is inferred from the gaps instead — so a Nightscout that
+ * has never seen one behaves exactly as it did before this existed.
+ */
+async function sensorStart(base: string, secret: string): Promise<number | undefined> {
+  const url = new URL("/api/v1/treatments.json", base);
+  url.searchParams.set("find[eventType]", "Sensor Start");
+  url.searchParams.set("count", "1");
+  const response = await fetch(url, {
+    headers: { "api-secret": secret, Accept: "application/json" },
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+  });
+  if (!response.ok) return undefined;
+  const body = (await response.json()) as { created_at?: unknown }[];
+  const stamp = Date.parse(String(body?.[0]?.created_at ?? ""));
+  return Number.isFinite(stamp) ? stamp : undefined;
 }

@@ -210,12 +210,33 @@ describe("how old the sensor is", () => {
     return out;
   }
 
-  it("counts from the last gap long enough to be a sensor change", async () => {
+  it("believes Nightscout's own Sensor Start over the readings", async () => {
+    // The site records one when the uploader writes it, and it is what the
+    // SAGE pill reads. Inference is the fallback, not the answer.
+    const { sessionFrom, sensorFinding } = await import("../src/copy/glucose/sensor.js");
+    const started = NOW - 8 * DAY;
+    const session = sessionFrom(readings(14), NOW, started);
+    assert.equal(session?.recorded, true);
+    assert.equal(session?.days, 8);
+    assert.match(sensorFinding(session)![1], /day 8 of 10, due in 2 days/);
+  });
+
+  it("prefers a gap that happened after the recorded start", async () => {
+    // A sensor changed and nobody wrote it down: the readings are then the more
+    // recent truth, and believing the treatment would report a sensor two days
+    // older than the one being worn.
+    const { sessionFrom } = await import("../src/copy/glucose/sensor.js");
+    const session = sessionFrom(readings(14, 4), NOW, NOW - 9 * DAY);
+    assert.equal(session?.recorded, false);
+    assert.equal(session?.days, 3);
+  });
+
+  it("counts from the last gap when nothing was recorded", async () => {
     const { sessionFrom, sensorFinding } = await import("../src/copy/glucose/sensor.js");
     const session = sessionFrom(readings(14, 9), NOW);
     assert.equal(session?.exact, true);
     assert.equal(session?.days, 8);
-    assert.match(sensorFinding(session)![1], /on day 8, counting from the last gap/);
+    assert.match(sensorFinding(session)![1], /day 8 of 10, due in 2 days — counted from a gap/);
   });
 
   it("says 'at least' when the readings hold no gap at all", async () => {
@@ -225,9 +246,18 @@ describe("how old the sensor is", () => {
     assert.match(sensorFinding(session)![1], /at least day 14 — no gap/);
   });
 
-  it("stays quiet for the first week, when it is not news", async () => {
+  it("stays quiet until the last three days", async () => {
+    // "Day 2 of 10" is not news. A line that appears every morning is one
+    // nobody reads on the morning it matters.
     const { sessionFrom, sensorFinding } = await import("../src/copy/glucose/sensor.js");
-    assert.equal(sensorFinding(sessionFrom(readings(3), NOW)), null);
+    assert.equal(sensorFinding(sessionFrom(readings(3), NOW, NOW - 2 * DAY)), null);
+    assert.ok(sensorFinding(sessionFrom(readings(3), NOW, NOW - 7 * DAY)));
+  });
+
+  it("says a sensor past its ten days is due now", async () => {
+    const { sessionFrom, sensorFinding } = await import("../src/copy/glucose/sensor.js");
+    const session = sessionFrom(readings(3), NOW, NOW - 11 * DAY);
+    assert.match(sensorFinding(session)![1], /day 11 of 10, due now, or already changed/);
   });
 
   it("ignores a gap short enough to be a shower", async () => {
