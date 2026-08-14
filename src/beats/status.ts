@@ -1,5 +1,5 @@
 /**
- * The status beat: `@Kubernetes status` and its siblings.
+ * The status beat: `@Houston status` and its siblings.
  *
  * Every verb but one is deterministic and free: status, certs, backups and
  * longhorn read the API and format what they find. `why` puts a model behind

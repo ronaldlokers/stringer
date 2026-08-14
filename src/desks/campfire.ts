@@ -98,7 +98,9 @@ export class CampfireDesk implements Desk {
 
 export function questionFrom(payload: CampfirePayload, base: string): Question {
   // `plain` arrives with the bot mention already stripped, so
-  // "@Kubernetes status" is "status".
+  // "@Houston status" is "status". Campfire strips it by the recipient user's
+  // own representation rather than by matching a string, so renaming the bot
+  // costs nothing here — see once-campfire's Webhook#without_recipient_mentions.
   const words = (payload.message?.body?.plain ?? "").trim().toLowerCase().split(/\s+/).filter(Boolean);
   const path = payload.room?.path;
   return {
