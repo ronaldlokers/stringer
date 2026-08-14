@@ -184,6 +184,33 @@ The lesson worth keeping is that the Vienna Method is the house's default, not
 its law. A tally answers "how much"; a trace answers "when". Glucose asks the
 first question and speedtest asks the second.
 
+## The three the glucose sheets were missing
+
+**Week against week, drawn.** The findings have compared the halves of the
+fortnight in words since the first version; the rows, which are the part
+actually looked at, showed nothing of it. Now a rule separates the two weeks
+and a line beneath the block reads "this week 94% · the week before 83% · up
+10". Drawn at the right edge of each week instead, it collided with that day's
+own percentage — "85%94%", two true numbers and one unreadable sheet.
+
+**The sensor's age**, on both sheets, in the last three days of its life —
+"day 8 of 10, due in 2 days". Coverage collapses on a predictable cycle, and
+the digest has always reported that afterwards as a day with withheld
+statistics.
+
+Nightscout answers this itself when the uploader records a `Sensor Start`
+treatment, which is what the site's own SAGE pill reads, and this instance has
+them. So that is the source. Gaps of 90 minutes or more — above a lost phone,
+below a warm-up — are the fallback for an instance without them, and a gap
+*after* a recorded start wins, because that means a sensor was changed and
+nobody wrote it down. Ten days is the Dexcom ONE+ figure and lives in one
+constant.
+
+**The encouraging line**, on the hour-marks caption of the daily sheet rather
+than in the findings block, which draws two findings and would drop it every
+day. It is a fact rather than praise: the longest unbroken stretch in range and
+when it began. "Well done" every morning is worth nothing by the second week.
+
 ## Voice
 
 Findings describe the reader's own data and never instruct. "The 08:00 hour ran

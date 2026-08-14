@@ -40,8 +40,12 @@ const MEASURE = WIDTH - 2 * MARGIN;
 export const FORTNIGHT_SOURCE = "glucose, fourteen days  ·  nightscout";
 export const DAY_SOURCE = "glucose  ·  nightscout";
 
-export function fortnightSheet(days: readonly Day[], bands: readonly Band[] = BANDS): string {
-  const found = findings(days, bands);
+export function fortnightSheet(
+  days: readonly Day[],
+  bands: readonly Band[] = BANDS,
+  extra: readonly Finding[] = [],
+): string {
+  const found = withExtra(findings(days, bands), extra);
   const parts: string[] = [masthead(FORTNIGHT_SOURCE, found)];
   parts.push(countedRows(days, bands));
   parts.push(typicalDay(days));
@@ -50,19 +54,46 @@ export function fortnightSheet(days: readonly Day[], bands: readonly Band[] = BA
   return document(parts.join(""));
 }
 
-export function daySheet(days: readonly Day[], bands: readonly Band[] = BANDS): string {
+export function daySheet(
+  days: readonly Day[],
+  bands: readonly Band[] = BANDS,
+  extra: readonly Finding[] = [],
+): string {
   const today = days[days.length - 1]!;
   const history = days.slice(0, -1);
-  const found = outliers(days, bands);
+  const found = withExtra(outliers(days, bands), extra);
   const head = masthead(`${today.label}  ·  ${DAY_SOURCE}`, found);
   const parts: string[] = [head.svg];
 
   const caption = Math.max(LAYOUT.against.caption, head.bottom + 52);
   parts.push(againstNormal(today, history, bands, caption));
-  parts.push(dayMarks(today, bands));
-  parts.push(findingBlock(found.slice(1, 3), LAYOUT.dayFindings));
+  // The encouraging line rides on the hour-marks caption rather than competing
+  // for the findings block, which draws two of them and would drop it every
+  // day. "The sheet has room under the bar" was the request, and this is that
+  // room — no extra rows, and it sits beside the marks it describes.
+  const unbroken = found.find(([key]) => key === "unbroken");
+  parts.push(dayMarks(today, bands, unbroken?.[1]));
+  parts.push(
+    findingBlock(
+      found.filter(([key]) => key !== "unbroken").slice(1, 3),
+      LAYOUT.dayFindings,
+    ),
+  );
   parts.push(foot(valuesOf(today)));
   return document(parts.join(""));
+}
+
+/**
+ * Findings the sheet was handed rather than computed — today, the sensor's age,
+ * which needs the raw readings and their gaps rather than days of values.
+ *
+ * Placed second, never first: the headline is the most consequential thing the
+ * data says, and how old the sensor is has never been that. Second is where
+ * the drawn block starts, so it is seen rather than dropped.
+ */
+function withExtra(found: readonly Finding[], extra: readonly Finding[]): Finding[] {
+  if (!extra.length) return [...found];
+  return [found[0]!, ...extra, ...found.slice(1)];
 }
 
 // --- pieces ----------------------------------------------------------------
@@ -119,7 +150,40 @@ function countedRows(days: readonly Day[], bands: readonly Band[]): string {
     }
     out.push(text(x + 16, y + mark - 4, "figure", `${percent(timeInRange(valuesOf(day)))}%`, ink));
     if (newest) out.push(rect(MARGIN, y + mark + 6, MEASURE, 1, RULE));
+
+    // A rule between the two weeks: the split, without a figure crowding the
+    // day's own percentage at the right edge.
+    const perWeek = Math.floor(days.length / 2);
+    if (perWeek >= 3 && (index + 1) % perWeek === 0 && index + 1 < days.length) {
+      out.push(rect(MARGIN, y + mark + 6, MEASURE, 1, RULE));
+    }
   });
+
+  // The two weeks compared, on their own line beneath the rows.
+  //
+  // The findings have said this in words since the first version — "this week,
+  // 71% in range, up 5 points on the week before" — and the rows, which are the
+  // part actually looked at, showed nothing of it. Drawn at the right edge of
+  // each week it collided with that day's own percentage: "85%94%", which is
+  // two true numbers and one unreadable sheet.
+  const perWeek = Math.floor(days.length / 2);
+  if (perWeek >= 3) {
+    const ordered = [...days].reverse();
+    const recent = timeInRange(ordered.slice(0, perWeek).flatMap(valuesOf));
+    const older = timeInRange(ordered.slice(perWeek, perWeek * 2).flatMap(valuesOf));
+    const move = (recent - older) * 100;
+    const direction = move >= 0 ? "up" : "down";
+    out.push(
+      text(
+        MARGIN,
+        top + days.length * height + 14,
+        "small",
+        `this week ${percent(recent)}% · the week before ${percent(older)}% · ` +
+          `${direction} ${fixed(Math.abs(move), 0)}`,
+        MUTED,
+      ),
+    );
+  }
   return out.join("");
 }
 
@@ -265,7 +329,7 @@ function axis(
 }
 
 /** The day as counted hours, so both sheets speak the same language. */
-function dayMarks(today: Day, bands: readonly Band[]): string {
+function dayMarks(today: Day, bands: readonly Band[], encouragement?: string): string {
   const top = LAYOUT.dayMarks;
   const mark = 26;
   const gap = 8;
@@ -273,6 +337,11 @@ function dayMarks(today: Day, bands: readonly Band[]): string {
     .filter((name): name is NonNullable<typeof name> => name !== null)
     .sort((a, b) => SEVERITY.indexOf(a) - SEVERITY.indexOf(b));
   const out = [text(MARGIN, top - 14, "body", "the day, hour by hour", INK)];
+  if (encouragement) {
+    out.push(
+      text(WIDTH - MARGIN, top - 14, "small", encouragement, MUTED, { anchor: "end" }),
+    );
+  }
   let x = MARGIN;
   for (const name of hours) {
     out.push(rect(x, top, mark, mark, BAND_COLOUR[name]));
