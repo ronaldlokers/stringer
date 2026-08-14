@@ -22,15 +22,12 @@
 import { escape } from "../copy/alerts/render.js";
 import { GIGABIT, type Day, type Plan, type Test } from "../copy/speedtest/week.js";
 import { renderWeek } from "../press/speedtest/index.js";
+import { describe, warmUp, withRetry } from "../retry.js";
 import { localDay, yesterday, type LocalDay } from "../time.js";
 import type { Round } from "../rounds.js";
 
 const DAYS = 7;
 const TIMEOUT_MS = 20_000;
-/** The first connection from a new pod can be refused while its NetworkPolicy
- *  is still being programmed; the symptom is one refusal and then success. */
-const ATTEMPTS = 3;
-const RETRY_MS = 5_000;
 
 /** One test an hour: the tracker's schedule, and the resolution of everything here. */
 const STEP_SECONDS = 3600;
@@ -48,15 +45,19 @@ export async function speedtest(round: Round, environment = process.env): Promis
   const window = daysEnding(last, zone, DAYS);
   const first = window[0]!;
 
+  // The pod's first connection is spent here, where failing means nothing,
+  // rather than on the query below, where it would read as a fault.
+  await warmUp(new URL("/-/ready", base).toString());
+
   let tests: Test[];
   try {
-    tests = await withRetry(() => fetchTests(base, first.start, last.end));
+    tests = await withRetry(() => fetchTests(base, first.start, last.end), { what: "query" });
   } catch (error) {
     // Say so rather than failing quietly: a weekly record that simply stops
     // arriving is indistinguishable from a week nobody looked at.
     await round.say(
       "<div><strong>📉 could not read the speedtest history</strong></div>" +
-        `<pre>${escape(String(error))}</pre>`,
+        `<pre>${escape(describe(error))}</pre>`,
     );
     return;
   }
@@ -120,22 +121,6 @@ function labelOf(day: LocalDay): string {
   const at = new Date(day.start + 43_200_000);
   const name = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"][at.getUTCDay()]!;
   return `${name} ${day.date.slice(8)}`;
-}
-
-async function withRetry<T>(attempt: () => Promise<T>): Promise<T> {
-  let last: unknown;
-  for (let round = 0; round < ATTEMPTS; round += 1) {
-    try {
-      return await attempt();
-    } catch (error) {
-      last = error;
-      if (round + 1 < ATTEMPTS) {
-        process.stdout.write(`query attempt ${round + 1} failed (${String(error)}), retrying\n`);
-        await new Promise((resolve) => setTimeout(resolve, RETRY_MS));
-      }
-    }
-  }
-  throw last;
 }
 
 /**
