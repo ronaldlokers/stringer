@@ -39,9 +39,12 @@ export function findings(days: readonly Day[], plan: Plan): Finding[] {
   const typical = median(downs);
   const out: Finding[] = [];
 
+  // The figure first, the share of the plan second. "93% of the gigabit
+  // arrived" leads with a ratio and reads like a translation; the speed is the
+  // thing, and what it is a share of is the context for it.
   out.push([
-    `${percent(share(typical, plan.down))}%`,
-    `of the ${headline(plan.down)} arrived, on a typical test this week`,
+    `${fixed(megabits(typical), 0)} Mbps`,
+    `down on a typical test, ${percent(share(typical, plan.down))}% of the ${headline(plan.down)}`,
   ]);
 
   /**

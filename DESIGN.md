@@ -127,19 +127,38 @@ of the plan, then olive, amber, and red furthest from it. What survives is the
 part that matters: green still means "as it should be".
 
 Composition is the same skeleton — source line, rule, headline finding, the
-middle, findings, ruled foot with four figures. The middle is two blocks of
-counted rows, seven days down and seven days up, one mark per test, sorted worst
-last so the length of the green run is the number of hours delivered as sold. An
-hour with no test is drawn in the rule colour rather than omitted; a missing
-mark would make a day the tracker slept through look like a day with fewer
-problems.
+middle, findings, ruled foot with four figures. The middle is one field: both
+directions traced over the week against the line the plan promises, from nothing
+to the plan plus 8% of headroom so that line sits *inside* the field and can be
+read. The extent is never fitted to the week — what is being read is the
+distance between the trace and the top, so the top has to mean the same thing
+every Sunday.
 
-**Rejected: every test plotted against the plan.** Built first, and cut on
-looking at it. Drawn from zero to a gigabit, a good week is 168 bars all within
-a few percent of the top — a solid field where the eye estimates shading, which
-is the same heatmap this design refuses for glucose. Counting the upload says
-more, because a symmetric plan stops being symmetric quietly: the week it
-replaced showed 93% down and 61% up.
+Two traces on one field rather than a sheet each, because the gap between them
+is the finding a symmetric plan hides. The first real week read 93% down and
+61% up.
+
+Only tests adjacent in time are joined; an hour with no test is a break in the
+line, not a straight segment through a speed nobody measured. Same rule as the
+glucose trace.
+
+### Two versions this replaced
+
+**One filled bar per test, against the plan.** Built first, cut on looking at a
+rendered week: from zero to a gigabit, a good week is 168 bars all within a few
+percent of the top, which is a solid block of colour where the eye estimates
+shading — the heatmap this design refuses for glucose.
+
+**Counted rows, fourteen of them.** Seven days down and seven days up, one mark
+per test, sorted worst last so the length of the green run was the number of
+hours delivered as sold. Strictly the more Vienna answer, and it read well.
+Replaced at the reader's request: on this subject he wants the *shape* of the
+week — where the notches fell — rather than its tally. What the rows carried
+survives in the two traces sharing one field.
+
+The lesson worth keeping is that the Vienna Method is the house's default, not
+its law. A tally answers "how much"; a trace answers "when". Glucose asks the
+first question and speedtest asks the second.
 
 ## Voice
 

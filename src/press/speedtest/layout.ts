@@ -15,19 +15,21 @@ export const LAYOUT = {
   ruleTop: 82,
   headlineBaseline: 150,
   headlineStep: 64,
-  /** Seven rows, one per day, newest first. Both blocks share the metrics. */
-  rows: { height: 34, mark: 24, gap: 6, labelX: MARGIN, marksX: 176 },
-  down: { caption: 288, top: 310 },
   /**
-   * The same week in the other direction, counted the same way.
+   * The week as two traces, down and up, against the line the plan promises.
    *
-   * This replaced a plot of every test against the plan. Drawn from zero to a
-   * gigabit, a good week is 168 bars all within a few percent of the top: a
-   * solid field where the eye estimates shading, which is the heatmap this
-   * design refuses. Counting the upload says more, because the upload is where
-   * a symmetric plan quietly stops being symmetric.
+   * An earlier version counted marks instead — one per test, in the Vienna
+   * Method the glucose sheets use. It read well and was replaced anyway,
+   * because the reader wanted the shape of the week rather than its tally. The
+   * thing the marks did carry survives here: both directions on one field, so
+   * the gap between what is sold and what arrives upward is the first thing
+   * seen.
+   *
+   * The failed version in between was one filled bar per test on the same
+   * field. That is a solid block of colour where the eye estimates shading; two
+   * lines encode by position, which the eye reads exactly.
    */
-  up: { caption: 596, top: 618 },
+  plot: { caption: 288, top: 312, bottom: 852, axis: 40 },
   findings: 900,
   findingStep: 70,
   foot: 1060,

@@ -90,10 +90,12 @@ describe("the bands are shortfall, not speed", () => {
 });
 
 describe("the sentences", () => {
-  it("leads with how much of the line arrived, even on a good week", () => {
+  it("leads with the speed, then what share of the plan that is", () => {
+    // "93% of the gigabit arrived" leads with a ratio and reads like a
+    // translation. The speed is the thing; the share is context for it.
     const [[key, sentence]] = findings(week(), GIGABIT) as [[string, string]];
-    assert.equal(key, "94%");
-    assert.match(sentence, /of the gigabit arrived/);
+    assert.equal(key, "940 Mbps");
+    assert.match(sentence, /down on a typical test, 94% of the gigabit/);
   });
 
   it("says so plainly when every test held", () => {
