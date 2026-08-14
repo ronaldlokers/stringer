@@ -7,6 +7,8 @@
  * bots with about ten lines of Campfire in them.
  */
 
+import { withRetry } from "./retry.js";
+
 /** What a round hands back, so a beat can come back to what it said. */
 export interface Posted {
   /** A handle this transport can amend later, or null if it cannot. */
@@ -40,7 +42,7 @@ class CampfireRound implements Round {
   constructor(private readonly url: string) {}
 
   async say(html: string): Promise<Posted> {
-    const response = await fetch(this.url, {
+    const response = await send(this.url, {
       method: "POST",
       headers: { "Content-Type": "text/html; charset=utf-8" },
       body: html,
@@ -54,13 +56,13 @@ class CampfireRound implements Round {
     // multipart form carries one and falls back to the raw body otherwise.
     const form = new FormData();
     form.append("attachment", pngBlob(png), filename);
-    const response = await fetch(this.url, { method: "POST", body: form });
+    const response = await send(this.url, { method: "POST", body: form });
     await expectOk(response);
     return { id: messageIdFrom(response.headers.get("location")) };
   }
 
   async amend(id: string, html: string): Promise<Posted> {
-    const response = await fetch(`${this.url}/${id}`, {
+    const response = await send(`${this.url}/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "text/html; charset=utf-8" },
       body: html,
@@ -90,7 +92,7 @@ class NtfyRound implements Round {
 
   async say(html: string): Promise<Posted> {
     await expectOk(
-      await fetch(this.url, {
+      await send(this.url, {
         method: "POST",
         headers: { "Content-Type": "text/html", Markdown: "no" },
         body: html,
@@ -101,7 +103,7 @@ class NtfyRound implements Round {
 
   async show(png: Uint8Array, filename: string): Promise<Posted> {
     await expectOk(
-      await fetch(this.url, {
+      await send(this.url, {
         method: "PUT",
         headers: { Filename: filename },
         body: pngBlob(png),
@@ -138,6 +140,37 @@ class StdoutRound implements Round {
  *  Uint8Array over a possibly-shared buffer is not one. */
 function pngBlob(png: Uint8Array): Blob {
   return new Blob([png as BlobPart], { type: "image/png" });
+}
+
+/**
+ * A request that survives one bad connection.
+ *
+ * Every beat reaches its own source through `withRetry`, and then handed the
+ * result to a delivery layer that got exactly one attempt — so a beat could
+ * gather a week of data perfectly and lose it to a single refused socket. Three
+ * beats did, on their first scheduled run, and the log said only
+ * `TypeError: fetch failed` because nothing unwrapped the cause.
+ *
+ * Only the transport is retried. A response that arrives with a bad status is
+ * returned as it is: a 401 is a wrong token and a 404 is a wrong room, and
+ * asking either of them twice more just delays the error by a second and a half.
+ *
+ * A retry can in principle post twice — if the request reached Campfire and the
+ * *response* was lost. That needs the failure to land in the window between the
+ * server committing and the client reading, which is far narrower than the
+ * window this closes, and a duplicate digest is a worse outcome than a missing
+ * one only in the sense that you have to read it twice.
+ */
+function send(url: string, init: RequestInit): Promise<Response> {
+  return withRetry(() => fetch(url, init), { what: `${init.method ?? "GET"} ${hostOf(url)}` });
+}
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
 }
 
 async function expectOk(response: Response): Promise<void> {
