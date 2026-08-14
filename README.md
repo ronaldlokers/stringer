@@ -56,6 +56,7 @@ docker run --rm -e DIGEST_DATE=2026-03-29 ghcr.io/ronaldlokers/stringer:latest h
 | `alerts` | Alertmanager and Flux webhooks; long-running | shipped |
 | `briefing` | the cluster at 07:00, or silence | shipped |
 | `speedtest` | the week's connection against what it is sold as; Sundays | shipped |
+| `storage` | what is growing and how long the disks have left; Sundays | shipped |
 | `status` | answers `@Houston status` and its siblings; long-running | shipped |
 
 ## Working on it
