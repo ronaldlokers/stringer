@@ -22,7 +22,7 @@
 import { escape } from "../copy/alerts/render.js";
 import { GIGABIT, type Day, type Plan, type Test } from "../copy/speedtest/week.js";
 import { renderWeek } from "../press/speedtest/index.js";
-import { describe, withRetry } from "../retry.js";
+import { describe, warmUp, withRetry } from "../retry.js";
 import { localDay, yesterday, type LocalDay } from "../time.js";
 import type { Round } from "../rounds.js";
 
@@ -44,6 +44,10 @@ export async function speedtest(round: Round, environment = process.env): Promis
     : yesterday(new Date(), zone);
   const window = daysEnding(last, zone, DAYS);
   const first = window[0]!;
+
+  // The pod's first connection is spent here, where failing means nothing,
+  // rather than on the query below, where it would read as a fault.
+  await warmUp(new URL("/-/ready", base).toString());
 
   let tests: Test[];
   try {

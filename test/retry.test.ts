@@ -8,7 +8,7 @@
  */
 
 import assert from "node:assert/strict";
-import { describe as report, withRetry } from "../src/retry.js";
+import { describe as report, warmUp, withRetry } from "../src/retry.js";
 import { describe, it } from "node:test";
 
 function refused(): Error {
@@ -76,3 +76,33 @@ describe("retrying", () => {
     assert.equal(calls, 3);
   });
 });
+
+describe("warming up", () => {
+  it("returns quietly when the first connection works", async () => {
+    const server = await listenOnce();
+    try {
+      await warmUp(server.url, 500);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("never throws when nothing answers, because the real request reports", async () => {
+    // Port 1 on localhost: refused immediately, four times over.
+    await warmUp("http://127.0.0.1:1/", 100);
+  });
+});
+
+async function listenOnce(): Promise<{ url: string; close: () => Promise<void> }> {
+  const { createServer } = await import("node:http");
+  const server = createServer((_request, response) => {
+    response.writeHead(200);
+    response.end("ok");
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address() as { port: number };
+  return {
+    url: `http://127.0.0.1:${port}/`,
+    close: () => new Promise<void>((resolve) => server.close(() => resolve())),
+  };
+}

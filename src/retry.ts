@@ -76,3 +76,32 @@ export function describe(error: unknown): string {
   const code = (cause as { code?: string }).code;
   return code ? `${text}: ${code}` : `${text}: ${String(cause)}`;
 }
+
+/**
+ * Spend the pod's first connection on purpose, before anything depends on it.
+ *
+ * A newly started pod cannot reach anything for its first half-second (see
+ * above), so whatever it asks for first pays that cost — and if that is a real
+ * request, the cost is an error line in the log that looks like a fault. This
+ * makes the first connection a throwaway one whose failure means nothing, so
+ * the request that follows is the pod's second and succeeds.
+ *
+ * It never throws. If the warm-up cannot connect at all, that is not this
+ * function's business to report: the real request is about to be made, it has
+ * its own retry, and it can say what went wrong with the detail that matters.
+ */
+export async function warmUp(url: string, timeoutMs = 2_000): Promise<void> {
+  const started = Date.now();
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    try {
+      await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+      process.stdout.write(`network up after ${Date.now() - started}ms\n`);
+      return;
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  }
+  // Deliberately quiet: say it took the whole budget, and let the real request
+  // be the one that reports a genuine failure.
+  process.stdout.write(`network still unproven after ${Date.now() - started}ms\n`);
+}
