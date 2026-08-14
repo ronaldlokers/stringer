@@ -111,6 +111,36 @@ middle, findings, ruled foot with four exact figures.
   middle half of the preceding days, so a departure is the line leaving the
   band. Then the day as counted hours, keeping both sheets in one language.
 
+## The second tenant: speedtest
+
+The press was built for one beat, so its "house style" was really one sheet's
+style until something else printed on it. Speedtest is that test, and
+**`tokens.ts` survived it unchanged** — ground, ink, faces, type scale and
+canvas all held. What the sheet needed was its own `palette.ts` and `layout.ts`,
+which is exactly the split this file claims. The house style is a house style.
+
+One thing did not carry over. The glucose palette's rule that *warm reads high*
+is meaningless here, where high is the good end; reusing it would have amber
+meaning opposite things on two sheets from the same press. So the speedtest ramp
+encodes **shortfall against what the line was sold as** — green at 90% or better
+of the plan, then olive, amber, and red furthest from it. What survives is the
+part that matters: green still means "as it should be".
+
+Composition is the same skeleton — source line, rule, headline finding, the
+middle, findings, ruled foot with four figures. The middle is two blocks of
+counted rows, seven days down and seven days up, one mark per test, sorted worst
+last so the length of the green run is the number of hours delivered as sold. An
+hour with no test is drawn in the rule colour rather than omitted; a missing
+mark would make a day the tracker slept through look like a day with fewer
+problems.
+
+**Rejected: every test plotted against the plan.** Built first, and cut on
+looking at it. Drawn from zero to a gigabit, a good week is 168 bars all within
+a few percent of the top — a solid field where the eye estimates shading, which
+is the same heatmap this design refuses for glucose. Counting the upload says
+more, because a symmetric plan stops being symmetric quietly: the week it
+replaced showed 93% down and 61% up.
+
 ## Voice
 
 Findings describe the reader's own data and never instruct. "The 08:00 hour ran
