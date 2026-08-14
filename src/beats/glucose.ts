@@ -34,10 +34,9 @@ import type { Round } from "../rounds.js";
 const HISTORY_DAYS = 14;
 const TIMEOUT_MS = 20_000;
 /**
- * The first connection from a fresh pod to a cross-namespace destination is
- * refused, and the next succeeds. Measured, not assumed — and it is not the
- * pod's own policy being written late, which is what this comment used to say.
- * See src/retry.ts.
+ * A newly started pod cannot reach anything for its first half-second, then can
+ * reach everything — it is the pod's own egress path coming up, not any one
+ * destination admitting it. Measured; see src/retry.ts for the experiment.
  */
 const ATTEMPTS = 3;
 const RETRY_MS = 5_000;

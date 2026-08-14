@@ -1,17 +1,26 @@
 /**
  * Retrying a first connection, and saying what actually went wrong.
  *
- * The first connection a fresh pod makes to a *cross-namespace* destination is
- * refused, and the next one succeeds. Measured in production rather than
- * assumed: from a pod carrying a beat's own labels, `campfire.campfire` (same
- * namespace) answered in 1ms, while `prometheus-speedtest.monitoring` refused
- * the first attempt in 4ms and answered the second. The pod's own policy is
- * programmed by the time it runs, so the older explanation — "the NetworkPolicy
- * is still being written" — is not what this is.
+ * **A newly started pod cannot reach anything for its first half-second or so,
+ * and then can reach everything.** Measured in production, from a pod carrying
+ * a beat's own labels, polling two services in turn:
  *
- * `fetch` reports every one of these as `TypeError: fetch failed` and hides the
- * detail on `error.cause`, so a log that stringifies the error says nothing at
- * all. Two runs were misdiagnosed that way. `describe` unwraps it.
+ *   first target polled    000, 000, 000, 200   (~0.9s)
+ *   second target polled   200                  (immediate)
+ *
+ * The second target was the one that had just been failing when it was polled
+ * first, which is what rules out the destination, its namespace and its node —
+ * all three were tried and none of them predicted the failure. What predicts it
+ * is being the pod's *first* outbound connection.
+ *
+ * So the retry is not waiting for a particular destination to admit this pod;
+ * it is waiting for the pod's own egress path to come up. Anything that makes
+ * one successful connection first — an init container, an earlier request —
+ * absorbs it instead.
+ *
+ * `fetch` reports all of it as `TypeError: fetch failed` and hides the detail
+ * on `error.cause`, so a log that stringifies the error says nothing at all.
+ * Three runs were misdiagnosed that way, twice by me. `describe` unwraps it.
  */
 
 const ATTEMPTS = 3;
