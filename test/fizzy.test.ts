@@ -84,6 +84,14 @@ describe("the message", () => {
     assert.equal(renderDigest(boardsFrom([], NOW), NOW), null);
   });
 
+  it("says which system it came from, because the bot posts everything", () => {
+    // "Campfire" is the name of a board and of the room this arrives in;
+    // without a source line the message could be about either.
+    const html = renderDigest(boardsFrom([card()], NOW), NOW)!;
+    assert.match(html, /the boards · fizzy/);
+    assert.ok(html.indexOf("fizzy") < html.indexOf("Homelab"), "the source leads");
+  });
+
   it("names what is next and how long the inbox has waited", () => {
     const boards = boardsFrom(
       [
