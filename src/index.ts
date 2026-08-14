@@ -13,7 +13,9 @@ import { fizzy } from "./beats/fizzy.js";
 import { glucose } from "./beats/glucose.js";
 import { hello } from "./beats/hello.js";
 import { memories } from "./beats/memories.js";
+import { reading } from "./beats/reading.js";
 import { renovate } from "./beats/renovate.js";
+import { security } from "./beats/security.js";
 import { speedtest } from "./beats/speedtest.js";
 import { status } from "./beats/status.js";
 import { storage } from "./beats/storage.js";
@@ -27,7 +29,9 @@ const BEATS: Record<string, (round: Round) => Promise<void>> = {
   glucose,
   hello,
   memories,
+  reading,
   renovate,
+  security,
   speedtest,
   status,
   storage,
