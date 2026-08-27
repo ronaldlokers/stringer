@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { createServer, type Server } from "node:http";
+import { after, describe, it } from "node:test";
 
 import { inventoryFrom } from "../src/copy/backups/inventory.js";
 import { findingsFrom, renderBackups } from "../src/copy/backups/findings.js";
 import type { Inventory, VolumeEntry } from "../src/copy/backups/inventory.js";
+import { backups, wantsWeekly } from "../src/beats/backups.js";
+import type { Posted, Round } from "../src/rounds.js";
 
 /** A Longhorn volume as the API returns it. */
 function volume(over: Record<string, unknown> = {}) {
@@ -333,5 +336,152 @@ describe("the post", () => {
     const html = renderBackups([{ kind: "failed", text: "a/b: <script>alert(1)</script>" }])!;
     assert.doesNotMatch(html, /<script>/);
     assert.match(html, /&lt;script&gt;/);
+  });
+});
+
+class Recording implements Round {
+  readonly said: string[] = [];
+  async say(html: string): Promise<Posted> {
+    this.said.push(html);
+    return { id: String(this.said.length) };
+  }
+  async show(): Promise<Posted> {
+    return { id: null };
+  }
+  async amend(_id: string, html: string): Promise<Posted> {
+    return this.say(html);
+  }
+}
+
+/** The Kubernetes API, as far as the beat can tell. */
+async function apiServer() {
+  const lists: Record<string, unknown[]> = {
+    "/apis/longhorn.io/v1beta2/volumes": [],
+    "/apis/longhorn.io/v1beta2/backupvolumes": [],
+    "/apis/longhorn.io/v1beta2/backups": [],
+    "/apis/longhorn.io/v1beta2/backuptargets": [],
+    "/api/v1/persistentvolumeclaims": [],
+  };
+  const broken = new Set<string>();
+  const server: Server = createServer((request, response) => {
+    const path = new URL(request.url!, "http://api.test").pathname;
+    // warmUp asks for this first and ignores the answer; a 404 here would cost
+    // every test in this suite four attempts and a second of sleeping.
+    if (path === "/version") {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end("{}");
+      return;
+    }
+    if (broken.has(path)) {
+      response.writeHead(500).end("nope");
+      return;
+    }
+    const items = lists[path];
+    if (!items) {
+      response.writeHead(404).end();
+      return;
+    }
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(JSON.stringify({ items }));
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const port = (server.address() as { port: number }).port;
+  return {
+    base: `http://127.0.0.1:${port}`,
+    lists,
+    broken,
+    close: () => new Promise<void>((resolve) => server.close(() => resolve())),
+  };
+}
+
+describe("the beat", async () => {
+  const api = await apiServer();
+  after(() => api.close());
+
+  const environment = (over: Record<string, string> = {}): NodeJS.ProcessEnv => ({
+    KUBE_API: api.base,
+    DIGEST_TIMEZONE: "Europe/Amsterdam",
+    // The beat reads the real clock, so the day is forced rather than dated:
+    // without this the suite would report leaks to itself every Sunday.
+    DIGEST_DAY: "daily",
+    ...over,
+  });
+
+  it("says nothing on a morning with nothing wrong", async () => {
+    api.lists["/apis/longhorn.io/v1beta2/backuptargets"] = [
+      { metadata: { name: "default" }, status: { available: true } },
+    ];
+    api.lists["/apis/longhorn.io/v1beta2/volumes"] = [];
+    const round = new Recording();
+    await backups(round, environment());
+    assert.deepEqual(round.said, []);
+  });
+
+  it("names a stale volume by its claim", async () => {
+    api.lists["/apis/longhorn.io/v1beta2/volumes"] = [
+      {
+        metadata: { name: "pvc-1", creationTimestamp: "2026-01-01T00:00:00Z", labels: {} },
+        status: {
+          state: "attached",
+          lastBackupAt: "2026-08-20T00:00:00Z",
+          kubernetesStatus: { namespace: "campfire", pvcName: "campfire-data" },
+        },
+      },
+    ];
+    api.lists["/api/v1/persistentvolumeclaims"] = [
+      { metadata: { name: "campfire-data", namespace: "campfire" }, spec: { volumeName: "pvc-1" } },
+    ];
+    const round = new Recording();
+    await backups(round, environment());
+    assert.equal(round.said.length, 1);
+    assert.match(round.said[0]!, /campfire\/campfire-data/);
+    assert.doesNotMatch(round.said[0]!, /pvc-1/);
+  });
+
+  it("says it could not read Longhorn rather than reporting a cluster it never read", async () => {
+    api.broken.add("/apis/longhorn.io/v1beta2/volumes");
+    const round = new Recording();
+    try {
+      await backups(round, environment());
+    } finally {
+      api.broken.delete("/apis/longhorn.io/v1beta2/volumes");
+    }
+    assert.equal(round.said.length, 1);
+    assert.match(round.said[0]!, /could not read Longhorn/);
+  });
+
+  it("files nothing about volumes when the claim list is the one that failed", async () => {
+    // Every volume would look leaked. A partial read is not a report.
+    api.broken.add("/api/v1/persistentvolumeclaims");
+    const round = new Recording();
+    try {
+      await backups(round, environment());
+    } finally {
+      api.broken.delete("/api/v1/persistentvolumeclaims");
+    }
+    assert.match(round.said[0]!, /could not read Longhorn/);
+    assert.doesNotMatch(round.said[0]!, /leaked|never backed up/);
+  });
+});
+
+describe("which day it is", () => {
+  it("is weekly on a Sunday in the configured zone", () => {
+    assert.equal(wantsWeekly(new Date("2026-08-30T05:30:00Z"), "Europe/Amsterdam", {}), true);
+  });
+
+  it("is not weekly on a Saturday", () => {
+    assert.equal(wantsWeekly(new Date("2026-08-29T05:30:00Z"), "Europe/Amsterdam", {}), false);
+  });
+
+  it("reads the day in the zone, not in UTC", () => {
+    // 23:30 UTC on Saturday is already Sunday in Amsterdam.
+    assert.equal(wantsWeekly(new Date("2026-08-29T23:30:00Z"), "Europe/Amsterdam", {}), true);
+  });
+
+  it("obeys DIGEST_DAY over the calendar", () => {
+    const saturday = new Date("2026-08-29T05:30:00Z");
+    assert.equal(wantsWeekly(saturday, "Europe/Amsterdam", { DIGEST_DAY: "weekly" }), true);
+    const sunday = new Date("2026-08-30T05:30:00Z");
+    assert.equal(wantsWeekly(sunday, "Europe/Amsterdam", { DIGEST_DAY: "daily" }), false);
   });
 });
