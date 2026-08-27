@@ -105,13 +105,13 @@ export async function glucose(round: Round, environment = process.env): Promise<
  * fortnight sheet arrives on Sunday morning covering the fortnight that ended
  * Saturday.
  */
-function wantsFortnight(day: LocalDay, environment: NodeJS.ProcessEnv): boolean {
+export function wantsFortnight(day: LocalDay, environment: NodeJS.ProcessEnv): boolean {
   const forced = environment.DIGEST_SHEET?.trim().toLowerCase();
   if (forced === "day" || forced === "fortnight") return forced === "fortnight";
   return new Date(day.start + 43_200_000).getUTCDay() === 6;
 }
 
-function daysEnding(last: LocalDay, timeZone: string, count: number): LocalDay[] {
+export function daysEnding(last: LocalDay, timeZone: string, count: number): LocalDay[] {
   const out: LocalDay[] = [];
   const [year, month, day] = last.date.split("-").map(Number) as [number, number, number];
   for (let back = count - 1; back >= 0; back -= 1) {
