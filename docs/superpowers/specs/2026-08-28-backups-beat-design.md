@@ -140,8 +140,9 @@ for glucose.
 ## Where it reads from
 
 The Kubernetes API, through the client the briefing already uses in
-`src/copy/cluster/kube.ts`. Five lists, all namespaced to `longhorn-system`
-except the last:
+`src/copy/cluster/kube.ts`. Five cluster-wide lists — the Longhorn resources
+are namespaced, but reading them across namespaces is what the briefing already
+does and it costs nothing extra:
 
 | Resource | For |
 |---|---|
@@ -179,7 +180,6 @@ posting, and holds no arithmetic of its own.
 | Variable | Meaning |
 |---|---|
 | `ROOM_URL` | as every beat |
-| `LONGHORN_NAMESPACE` | default `longhorn-system` |
 | `BACKUP_STALE_HOURS` | default 26 |
 | `BACKUP_LEAK_HOURS` | how long a PVC-less volume must have existed before it is a leak; default 24 |
 | `DIGEST_TIMEZONE` | which day it is; default `Europe/Amsterdam` |
