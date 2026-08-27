@@ -26,7 +26,9 @@ import {
   wholeDay,
   type Entry,
 } from "../copy/glucose/days.js";
+import { escape } from "../copy/alerts/render.js";
 import { renderDay, renderFortnight } from "../press/glucose/index.js";
+import { describe, warmUp, withRetry } from "../retry.js";
 import { sensorFinding, sessionFrom } from "../copy/glucose/sensor.js";
 import { localDay, yesterday, type LocalDay } from "../time.js";
 import type { Round } from "../rounds.js";
@@ -34,13 +36,6 @@ import type { Round } from "../rounds.js";
 /** Fourteen days is the clinical convention for a stable time-in-range figure. */
 const HISTORY_DAYS = 14;
 const TIMEOUT_MS = 20_000;
-/**
- * A newly started pod cannot reach anything for its first half-second, then can
- * reach everything — it is the pod's own egress path coming up, not any one
- * destination admitting it. Measured; see src/retry.ts for the experiment.
- */
-const ATTEMPTS = 3;
-const RETRY_MS = 5_000;
 
 export async function glucose(round: Round, environment = process.env): Promise<void> {
   const zone = environment.DIGEST_TIMEZONE?.trim() || "Europe/Amsterdam";
@@ -56,15 +51,19 @@ export async function glucose(round: Round, environment = process.env): Promise<
   const window = daysEnding(day, zone, HISTORY_DAYS);
   const first = window[0]!;
 
+  await warmUp(new URL("/api/v1/status.json", base).toString());
+
   let entries: Entry[];
   try {
-    entries = await fetchWithRetry(base, secret, first.start, day.end);
+    entries = await withRetry(() => fetchEntries(base, secret, first.start, day.end), {
+      what: "nightscout",
+    });
   } catch (error) {
     // Say so in the room rather than failing quietly. A digest that simply
     // stops arriving is indistinguishable from a day nobody looked at.
     await round.say(
       "<div><strong>🩺 could not read Nightscout</strong></div>" +
-        `<pre>${escape(String(error))}</pre>`,
+        `<pre>${escape(describe(error))}</pre>`,
     );
     return;
   }
@@ -122,27 +121,6 @@ function daysEnding(last: LocalDay, timeZone: string, count: number): LocalDay[]
   return out;
 }
 
-async function fetchWithRetry(
-  base: string,
-  secret: string,
-  startMs: number,
-  endMs: number,
-): Promise<Entry[]> {
-  let last: unknown;
-  for (let attempt = 0; attempt < ATTEMPTS; attempt += 1) {
-    try {
-      return await fetchEntries(base, secret, startMs, endMs);
-    } catch (error) {
-      last = error;
-      if (attempt + 1 < ATTEMPTS) {
-        process.stdout.write(`fetch attempt ${attempt + 1} failed (${String(error)}), retrying\n`);
-        await new Promise((resolve) => setTimeout(resolve, RETRY_MS));
-      }
-    }
-  }
-  throw last;
-}
-
 async function fetchEntries(
   base: string,
   secret: string,
@@ -196,9 +174,6 @@ function shortfall(day: LocalDay, count: number, expected: number, zone: string)
   );
 }
 
-function escape(text: string): string {
-  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
 
 /**
  * When Nightscout says the current sensor began.
