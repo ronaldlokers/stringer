@@ -102,7 +102,7 @@ export async function renderBackups(kube: Kube, now = new Date()): Promise<strin
   return heading("postgres clusters") + bullets([...postgres.fresh, ...postgres.problems]);
 }
 
-export async function renderLonghorn(kube: Kube, now = new Date()): Promise<string> {
+export async function renderLonghorn(kube: Kube): Promise<string> {
   const { health, problems } = await checkVolumes(kube, budget(DEADLINE_MS));
   return (
     (problems.length ? heading(`⚠️ ${problems.length}`) + bullets(problems) : "") +
@@ -118,7 +118,7 @@ export async function renderVerb(verb: string, kube: Kube, now = new Date()): Pr
     case "backups":
       return renderBackups(kube, now);
     case "longhorn":
-      return renderLonghorn(kube, now);
+      return renderLonghorn(kube);
     default:
       return renderStatus(kube, now);
   }
