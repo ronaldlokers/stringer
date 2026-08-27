@@ -53,6 +53,24 @@ on any given morning is staleness and reachability, while leaks and orphans are
 standing conditions that would otherwise be repeated every day until someone
 acted.
 
+## What the briefing already does, and stops doing
+
+`checkVolumes` in `src/copy/cluster/checks.ts` already reads Longhorn volumes
+and reports two things: replica robustness, and backups — an age past 26 hours,
+or none at all once the volume is older than the same 26 hours.
+
+The backup half has been wrong every morning since roughly 14 August. It has no
+way to tell a volume whose PVC is gone from a volume that nobody is protecting,
+so all 23 leaked drill volumes are reported as "never backed up", every day, in
+the section that decides whether the briefing mentions anyone. The youngest is
+127 hours old and the oldest 332, so none of them is inside the grace.
+
+So the backup half moves here. `checkVolumes` keeps robustness and state, which
+are health rather than backup, and loses `lastBackupAt` entirely. The backups
+beat becomes the only thing in the repository that reports backup freshness,
+and it is the only one that can, because it is the only one that reads the PVCs
+it needs to tell leaked from unprotected.
+
 ## What the beat reports
 
 Six findings, in the order a reader needs them.
@@ -84,13 +102,17 @@ Six findings, in the order a reader needs them.
 
 ### Opting out
 
-A volume can be exempt from finding 4 by a label on its PVC:
+A volume can be exempt from finding 4 by an annotation on its PVC:
 
 ```yaml
 metadata:
-  labels:
+  annotations:
     backup.stringer/none: "a cache, rebuilt on start"
 ```
+
+An annotation rather than a label because the value is a sentence: label values
+admit only alphanumerics, dashes, underscores and dots, so a reason worth
+reading would be rejected by the API server.
 
 The value is the reason and the beat quotes it back on the Sunday the volume
 first appears, so an exemption nobody can justify reads as one. The reason
