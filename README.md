@@ -39,6 +39,10 @@ stringer <beat>
 | `GITHUB_REPO` | `owner/name`, default `ronaldlokers/homelab` |
 | `PROMETHEUS_URL` | for `speedtest`, default the 400-day speedtest instance |
 | `PLAN_DOWN_MBPS` | what the line is sold as, default 1000; `PLAN_UP_MBPS` likewise |
+| `KUBE_API` | API base for `briefing` and `backups`, default `https://kubernetes.default.svc` |
+| `BACKUP_STALE_HOURS` | past this a volume backup is late; default 26 |
+| `BACKUP_LEAK_HOURS` | how long a volume with no claim must persist before it is a leak; default 24 |
+| `DIGEST_DAY` | force `backups` to file the `weekly` or `daily` set |
 | `PGUSER`, `PGPASSWORD` | the read-only role, for `reading` and `security` |
 
 With no room configured it prints to stdout, which is what a dry run is.
@@ -61,6 +65,12 @@ docker run --rm -e DIGEST_DATE=2026-03-29 ghcr.io/ronaldlokers/stringer:latest h
 | `security` | authentik's events, when any of them matter; hourly | shipped |
 | `storage` | what is growing and how long the disks have left; Sundays | shipped |
 | `status` | answers `@Houston status` and its siblings; long-running | shipped |
+| `backups` | Longhorn: what did not back up, and on Sundays what is left behind | shipped |
+
+A volume that is deliberately not backed up says so on its claim:
+`backup.stringer/none: "a cache, rebuilt on start"`, as an annotation rather
+than a label — a label value cannot hold a sentence. The beat quotes the reason
+back, so an exemption nobody can justify reads as one.
 
 ## Working on it
 
