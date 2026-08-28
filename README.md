@@ -39,7 +39,17 @@ stringer <beat>
 | `GITHUB_REPO` | `owner/name`, default `ronaldlokers/homelab` |
 | `PROMETHEUS_URL` | for `speedtest`, default the 400-day speedtest instance |
 | `PLAN_DOWN_MBPS` | what the line is sold as, default 1000; `PLAN_UP_MBPS` likewise |
-| `PGUSER`, `PGPASSWORD` | the read-only role, for `reading` and `security` |
+| `PGUSER`, `PGPASSWORD` | the read-only role, for `reading`, `security` and `uptime` |
+| `PGHOST`, `PGPORT` | default the shared cluster's read-write service |
+| `UPTIME_DAYS` | how far back `uptime` counts, default 30 |
+| `NIGHTSCOUT_URL` | for `glucose`, default the in-cluster Service |
+| `NIGHTSCOUT_API_SECRET_SHA1` | sent as the `api-secret` header |
+| `DIGEST_SHEET` | file the `day` or `fortnight` sheet, whatever the weekday says |
+| `MIN_UPTIME_PERCENT` | below this sensor coverage the day's statistics are withheld; default 70 |
+| `IMMICH_URL`, `IMMICH_API_KEY` | the library, and a key from Account Settings → API Keys |
+| `MEMORY_YEARS` | how far back `memories` looks, default 10 |
+| `FIZZY_URL`, `FIZZY_TOKEN` | the boards, and a personal access token |
+| `FIZZY_ACCOUNT` | the account slug in the path, default `1` |
 
 With no room configured it prints to stdout, which is what a dry run is.
 
@@ -52,7 +62,7 @@ docker run --rm -e DIGEST_DATE=2026-03-29 ghcr.io/ronaldlokers/stringer:latest h
 | Beat | Covers | State |
 |---|---|---|
 | `hello` | nothing; proves the wire and the zone database | shipped |
-| `glucose` | Nightscout — the daily and fortnight sheets | statistics and renderer ported; the beat itself is next |
+| `glucose` | Nightscout — the daily and fortnight sheets | shipped |
 | `renovate` | dependency updates left open, and which are not routine | shipped |
 | `alerts` | Alertmanager and Flux webhooks; long-running | shipped |
 | `briefing` | the cluster at 07:00, or silence | shipped |
@@ -61,6 +71,9 @@ docker run --rm -e DIGEST_DATE=2026-03-29 ghcr.io/ronaldlokers/stringer:latest h
 | `security` | authentik's events, when any of them matter; hourly | shipped |
 | `storage` | what is growing and how long the disks have left; Sundays | shipped |
 | `status` | answers `@Houston status` and its siblings; long-running | shipped |
+| `fizzy` | what the boards are holding, and what has stalled; Mondays | shipped |
+| `memories` | photographs taken on this date in earlier years; daily | shipped |
+| `uptime` | thirty days of probes: the worst service and the longest outage; monthly | shipped |
 
 ## Working on it
 
