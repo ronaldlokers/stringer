@@ -18,7 +18,7 @@ import {
   checkPods,
   checkVolumes,
 } from "../src/copy/cluster/checks.js";
-import { budget, type Deadline, type Kube } from "../src/copy/cluster/kube.js";
+import { budget, Kube as Client, Throttled, type Deadline, type Kube } from "../src/copy/cluster/kube.js";
 
 const NOW = new Date("2026-08-13T07:00:00Z");
 const ago = (hours: number) => new Date(NOW.getTime() - hours * 3_600_000).toISOString();
@@ -34,6 +34,84 @@ function fakeKube(byPath: Record<string, unknown[]>): Kube {
 }
 
 const DEADLINE: Deadline = { remaining: () => 5_000 };
+
+describe("what the client does with a refusal", () => {
+  /** An API server that answers however the test says. */
+  async function apiSaying(status: number, headers: Record<string, string> = {}) {
+    const { createServer } = await import("node:http");
+    const server = createServer((_request, response) => {
+      response.writeHead(status, headers).end("no");
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const port = (server.address() as { port: number }).port;
+    return {
+      client: new Client(`http://127.0.0.1:${port}`),
+      close: () => new Promise<void>((resolve) => server.close(() => resolve())),
+    };
+  }
+
+  it("carries the wait the server asked for, so the retry can honour it", async () => {
+    const api = await apiSaying(429, { "retry-after": "2" });
+    try {
+      await assert.rejects(
+        () => api.client.list("/apis/longhorn.io/v1beta2/backups", budget(5_000)),
+        (error: unknown) => {
+          assert.ok(error instanceof Throttled, "a 429 should be a Throttled");
+          assert.equal((error as Throttled).retryAfterMs, 2_000);
+          return true;
+        },
+      );
+    } finally {
+      await api.close();
+    }
+  });
+
+  it("falls back to a second when the server names no delay", async () => {
+    const api = await apiSaying(429);
+    try {
+      await assert.rejects(
+        () => api.client.list("/api/v1/persistentvolumeclaims", budget(5_000)),
+        (error: unknown) => {
+          assert.equal((error as Throttled).retryAfterMs, 1_000);
+          return true;
+        },
+      );
+    } finally {
+      await api.close();
+    }
+  });
+
+  it("caps a server asking for an hour at something a beat can survive", async () => {
+    const api = await apiSaying(503, { "retry-after": "3600" });
+    try {
+      await assert.rejects(
+        () => api.client.list("/api/v1/pods", budget(5_000)),
+        (error: unknown) => {
+          assert.equal((error as Throttled).retryAfterMs, 15_000);
+          return true;
+        },
+      );
+    } finally {
+      await api.close();
+    }
+  });
+
+  it("leaves an ordinary failure ordinary, with nothing to wait for", async () => {
+    const api = await apiSaying(500);
+    try {
+      await assert.rejects(
+        () => api.client.list("/api/v1/pods", budget(5_000)),
+        (error: unknown) => {
+          assert.ok(!(error instanceof Throttled), "500 is not something to wait out");
+          assert.match(String(error), /HTTP 500/);
+          return true;
+        },
+      );
+    } finally {
+      await api.close();
+    }
+  });
+});
 
 describe("flux", () => {
   it("reports Ready=False however fresh it is", async () => {

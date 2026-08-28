@@ -538,6 +538,8 @@ async function apiServer() {
     "/api/v1/persistentvolumeclaims": [],
   };
   const broken = new Set<string>();
+  /** Paths that answer 429 once before behaving, as a busy API server does. */
+  const throttled = new Map<string, number>();
   const server: Server = createServer((request, response) => {
     const path = new URL(request.url!, "http://api.test").pathname;
     // warmUp asks for this first and ignores the answer; a 404 here would cost
@@ -549,6 +551,12 @@ async function apiServer() {
     }
     if (broken.has(path)) {
       response.writeHead(500).end("nope");
+      return;
+    }
+    const left = throttled.get(path) ?? 0;
+    if (left > 0) {
+      throttled.set(path, left - 1);
+      response.writeHead(429, { "retry-after": "1" }).end("slow down");
       return;
     }
     const items = lists[path];
@@ -565,6 +573,7 @@ async function apiServer() {
     base: `http://127.0.0.1:${port}`,
     lists,
     broken,
+    throttled,
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),
   };
 }
@@ -621,6 +630,17 @@ describe("the beat", async () => {
     assert.equal(round.said.length, 1);
     assert.match(round.said[0]!, /campfire\/campfire-data/);
     assert.doesNotMatch(round.said[0]!, /pvc-1/);
+  });
+
+  it("waits out a busy API server instead of reporting the cluster unreadable", async () => {
+    // What happened on the first real run: five lists during a Flux reconcile,
+    // 429 from priority and fairness, and a beat that gave up inside the
+    // second the server asked it to wait.
+    api.throttled.set("/apis/longhorn.io/v1beta2/backups", 1);
+    const round = new Recording();
+    await backups(round, environment());
+    assert.deepEqual(round.said, [], "a healthy cluster behind one 429 is still a healthy cluster");
+    assert.equal(api.throttled.get("/apis/longhorn.io/v1beta2/backups"), 0, "the 429 was never served");
   });
 
   it("says it could not read Longhorn rather than reporting a cluster it never read", async () => {

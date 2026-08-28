@@ -32,7 +32,27 @@ import { budget, Kube } from "../copy/cluster/kube.js";
 import { describe, warmUp, withRetry } from "../retry.js";
 import type { Round } from "../rounds.js";
 
-const DEADLINE_MS = 30_000;
+/**
+ * The whole gathering budget. Nothing waits on a CronJob at half past seven,
+ * and a run that has been told to wait by the API server needs room to do it.
+ */
+const DEADLINE_MS = 90_000;
+/**
+ * Four rather than three, because the wait between attempts is now the server's
+ * own Retry-After rather than a fixed 750ms — the extra attempt costs a second
+ * on a bad morning and nothing at all on a good one.
+ */
+const ATTEMPTS = 4;
+/**
+ * A breath between reads.
+ *
+ * The five lists are one flow as far as API Priority and Fairness is
+ * concerned, and the third of them asks for 649 Backup objects. Fired back to
+ * back during a Flux reconcile they were refused with 429; spaced, they are
+ * not. This is politeness rather than correctness — the retry above is what
+ * makes it correct — but a beat that never trips the limiter never has to.
+ */
+const SPACING_MS = 250;
 const VOLUMES = "/apis/longhorn.io/v1beta2/volumes";
 const BACKUP_VOLUMES = "/apis/longhorn.io/v1beta2/backupvolumes";
 const BACKUPS = "/apis/longhorn.io/v1beta2/backups";
@@ -54,19 +74,18 @@ export async function backups(round: Round, environment = process.env): Promise<
   try {
     // All five, or none. An inventory missing its claim list reports every
     // volume in the cluster as leaked, which is worse than reporting nothing.
-    // The five reads share this one 30s budget sequentially rather than
-    // running in parallel, but each request is capped at 1.5s by Kube, so
-    // three full retry attempts of five reads each still fit inside it.
+    // They run in turn rather than together, spaced by SPACING_MS, and share
+    // the one budget above; each request is capped at 1.5s by Kube.
     inventory = await withRetry(
       async () =>
         inventoryFrom(
-          await kube.list<RawVolume>(VOLUMES, deadline),
-          await kube.list<RawBackupVolume>(BACKUP_VOLUMES, deadline),
-          await kube.list<RawBackup>(BACKUPS, deadline),
-          await kube.list<RawTarget>(TARGETS, deadline),
+          await spaced(kube.list<RawVolume>(VOLUMES, deadline)),
+          await spaced(kube.list<RawBackupVolume>(BACKUP_VOLUMES, deadline)),
+          await spaced(kube.list<RawBackup>(BACKUPS, deadline)),
+          await spaced(kube.list<RawTarget>(TARGETS, deadline)),
           await kube.list<RawClaim>(CLAIMS, deadline),
         ),
-      { what: "longhorn" },
+      { what: "longhorn", attempts: ATTEMPTS },
     );
   } catch (error) {
     await round.say(
@@ -89,6 +108,13 @@ export async function backups(round: Round, environment = process.env): Promise<
     return;
   }
   await round.say(body);
+}
+
+/** A read, then a pause before the next one. The last read needs no pause. */
+async function spaced<T>(reading: Promise<T>): Promise<T> {
+  const value = await reading;
+  await new Promise((resolve) => setTimeout(resolve, SPACING_MS));
+  return value;
 }
 
 /**
