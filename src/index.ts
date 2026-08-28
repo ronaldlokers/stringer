@@ -8,6 +8,7 @@
  */
 
 import { alerts } from "./beats/alerts.js";
+import { backups } from "./beats/backups.js";
 import { briefing } from "./beats/briefing.js";
 import { fizzy } from "./beats/fizzy.js";
 import { glucose } from "./beats/glucose.js";
@@ -25,6 +26,7 @@ import type { Round } from "./rounds.js";
 
 const BEATS: Record<string, (round: Round) => Promise<void>> = {
   alerts,
+  backups,
   briefing,
   fizzy,
   glucose,

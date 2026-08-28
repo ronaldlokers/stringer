@@ -19,8 +19,8 @@ export const HELP =
   "<ul>" +
   "<li><code>status</code> — anything currently wrong, across every check</li>" +
   "<li><code>certs</code> — certificate expiry per Ingress</li>" +
-  "<li><code>backups</code> — Longhorn backup recency per volume</li>" +
-  "<li><code>longhorn</code> — volume health and replica state</li>" +
+  "<li><code>backups</code> — Postgres cluster backup recency</li>" +
+  "<li><code>longhorn</code> — volume health and replica state (backup recency moved to the <code>backups</code> beat)</li>" +
   "<li><code>why</code> — ask a model to explain a failure (operator only)</li>" +
   "<li><code>reconcile &lt;kustomization&gt;</code> — ask Flux to sync now (operator only)</li>" +
   "<li><code>restart &lt;namespace&gt;/&lt;deployment&gt;</code> — roll a workload (operator only)</li>" +
@@ -60,7 +60,7 @@ export async function renderStatus(kube: Kube, now = new Date()): Promise<string
   // The certificate and volume listings belong to their own verbs; status
   // takes only what is wrong, so it stays short enough to read at a glance.
   await attempt("certs", async () => (await checkCerts(kube, deadline, now)).problems);
-  await attempt("volumes", async () => (await checkVolumes(kube, deadline, now)).problems);
+  await attempt("volumes", async () => (await checkVolumes(kube, deadline)).problems);
 
   const parts: string[] = [];
   if (problems.length) {
@@ -88,20 +88,22 @@ export async function renderCerts(kube: Kube, now = new Date()): Promise<string>
   );
 }
 
+/**
+ * Postgres cluster backup recency.
+ *
+ * Longhorn backup ages used to live here too, read straight off
+ * `lastBackupAt` with no view of PersistentVolumeClaims — the blind spot that
+ * had `checkVolumes` reporting the restore drill's abandoned scratch volumes
+ * as unprotected data. That reporting now belongs to the backups beat, which
+ * reads the claims and can tell the difference; ask it, not this verb.
+ */
 export async function renderBackups(kube: Kube, now = new Date()): Promise<string> {
-  const deadline = budget(DEADLINE_MS);
-  const volumes = await checkVolumes(kube, deadline, now);
-  const postgres = await checkBackups(kube, deadline, now);
-  return (
-    heading("longhorn volumes") +
-    bullets(volumes.backups) +
-    heading("postgres clusters") +
-    bullets([...postgres.fresh, ...postgres.problems])
-  );
+  const postgres = await checkBackups(kube, budget(DEADLINE_MS), now);
+  return heading("postgres clusters") + bullets([...postgres.fresh, ...postgres.problems]);
 }
 
-export async function renderLonghorn(kube: Kube, now = new Date()): Promise<string> {
-  const { health, problems } = await checkVolumes(kube, budget(DEADLINE_MS), now);
+export async function renderLonghorn(kube: Kube): Promise<string> {
+  const { health, problems } = await checkVolumes(kube, budget(DEADLINE_MS));
   return (
     (problems.length ? heading(`⚠️ ${problems.length}`) + bullets(problems) : "") +
     heading("volumes") +
@@ -116,7 +118,7 @@ export async function renderVerb(verb: string, kube: Kube, now = new Date()): Pr
     case "backups":
       return renderBackups(kube, now);
     case "longhorn":
-      return renderLonghorn(kube, now);
+      return renderLonghorn(kube);
     default:
       return renderStatus(kube, now);
   }

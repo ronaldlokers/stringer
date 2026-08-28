@@ -21,8 +21,6 @@ import {
 export const PROGRESSING_GRACE_MINUTES = 10;
 /** A day plus the slack a nightly job needs. */
 export const BACKUP_MAX_AGE_HOURS = 26;
-/** A new volume has not had a backup window yet. */
-export const NEW_VOLUME_GRACE_HOURS = BACKUP_MAX_AGE_HOURS;
 
 const FLUX_KINDS: readonly [string, string][] = [
   ["/apis/kustomize.toolkit.fluxcd.io/v1/kustomizations", "Kustomization"],
@@ -205,24 +203,23 @@ export async function checkCerts(
 }
 
 /**
- * Longhorn volume health and backup recency.
+ * Longhorn volume health: replica robustness and attach state.
  *
- * Three listings because the verbs want different cuts of one API call: backup
- * ages, health, and the problems worth putting in a briefing.
+ * Backup freshness is deliberately absent. This check has no view of
+ * PersistentVolumeClaims, so it cannot tell a volume whose claim is gone from
+ * one nobody is protecting — the backups beat reads the claims and owns that
+ * judgment instead.
  */
 export async function checkVolumes(
   kube: Kube,
   deadline: Deadline,
-  now: Date,
-): Promise<{ backups: string[]; health: string[]; problems: string[] }> {
-  const backups: string[] = [];
+): Promise<{ health: string[]; problems: string[] }> {
   const health: string[] = [];
   const problems: string[] = [];
   type Volume = Resource & {
     status?: {
       robustness?: string;
       state?: string;
-      lastBackupAt?: string;
       kubernetesStatus?: { namespace?: string; pvcName?: string };
     };
   };
@@ -237,24 +234,10 @@ export async function checkVolumes(
       problems.push(`Volume ${name}: ${robustness}`);
     }
 
-    const last = volume.status?.lastBackupAt;
-    if (last) {
-      const age = hoursSince(last, now);
-      backups.push(`${name}: ${age.toFixed(1)}h ago`);
-      if (age > BACKUP_MAX_AGE_HOURS) {
-        problems.push(
-          `Volume ${name}: backup ${age.toFixed(0)}h old, past the ${BACKUP_MAX_AGE_HOURS}h window`,
-        );
-      }
-    } else {
-      backups.push(`${name}: never`);
-      // Only a fault once the volume has existed long enough to have had a
-      // backup window. Without this every new PVC reports one for a day.
-      const created = volume.metadata.creationTimestamp;
-      if (created && hoursSince(created, now) > NEW_VOLUME_GRACE_HOURS) {
-        problems.push(`Volume ${name}: never backed up`);
-      }
-    }
+    // Backups are not checked here. This function cannot tell a volume whose claim
+    // is gone from a volume nobody is protecting, and reported the restore drill's
+    // abandoned scratch volumes as unprotected data every morning for a fortnight.
+    // The backups beat reads the claims, so it can tell the difference.
   }
-  return { backups, health, problems };
+  return { health, problems };
 }

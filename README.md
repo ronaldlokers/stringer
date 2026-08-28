@@ -50,6 +50,10 @@ stringer <beat>
 | `MEMORY_YEARS` | how far back `memories` looks, default 10 |
 | `FIZZY_URL`, `FIZZY_TOKEN` | the boards, and a personal access token |
 | `FIZZY_ACCOUNT` | the account slug in the path, default `1` |
+| `KUBE_API` | API base for `briefing` and `backups`, default `https://kubernetes.default.svc` |
+| `BACKUP_STALE_HOURS` | past this a volume backup is late; default 26 |
+| `BACKUP_LEAK_HOURS` | how long a volume with no claim must persist before it is a leak; default 24 |
+| `DIGEST_DAY` | force `backups` to file the `weekly` or `daily` set |
 
 With no room configured it prints to stdout, which is what a dry run is.
 
@@ -74,6 +78,14 @@ docker run --rm -e DIGEST_DATE=2026-03-29 ghcr.io/ronaldlokers/stringer:latest h
 | `fizzy` | what the boards are holding, and what has stalled; Mondays | shipped |
 | `memories` | photographs taken on this date in earlier years; daily | shipped |
 | `uptime` | thirty days of probes: the worst service and the longest outage; monthly | shipped |
+| `backups` | Longhorn: what did not back up, and on Sundays what is left behind | shipped |
+
+A volume that is deliberately not backed up says so on its claim:
+`backup.stringer/none: "a cache, rebuilt on start"`, as an annotation rather
+than a label — a label value cannot hold a sentence. The reason lives on the
+claim, for whoever reads the manifest; the beat does not quote it back, since
+an exemption line every Sunday is exactly the noise the cadence rule exists to
+avoid.
 
 ## Working on it
 

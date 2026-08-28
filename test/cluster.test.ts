@@ -179,38 +179,40 @@ describe("certificates", () => {
 });
 
 describe("volumes", () => {
-  it("gives a new volume its first day before calling it unbacked", async () => {
+  it("reports replica robustness, which is health rather than backup", async () => {
     const kube = fakeKube({
-      "/apis/longhorn": [
+      "/apis/longhorn.io/v1beta2/volumes": [
         {
-          metadata: { name: "pvc-new", creationTimestamp: ago(2) },
-          status: { robustness: "healthy", state: "attached" },
-        },
-        {
-          metadata: { name: "pvc-old", creationTimestamp: ago(500) },
-          status: { robustness: "healthy", state: "attached" },
-        },
-      ],
-    });
-    const { problems } = await checkVolumes(kube, DEADLINE, NOW);
-    assert.deepEqual(problems, ["Volume pvc-old: never backed up"]);
-  });
-
-  it("names a volume by its claim when one is bound", async () => {
-    const kube = fakeKube({
-      "/apis/longhorn": [
-        {
-          metadata: { name: "pvc-123", creationTimestamp: ago(1) },
+          metadata: { name: "pvc-1" },
           status: {
             robustness: "degraded",
             state: "attached",
-            kubernetesStatus: { namespace: "database", pvcName: "data" },
+            lastBackupAt: "2020-01-01T00:00:00Z",
+            kubernetesStatus: { namespace: "campfire", pvcName: "campfire-data" },
           },
         },
       ],
     });
-    const { problems } = await checkVolumes(kube, DEADLINE, NOW);
-    assert.deepEqual(problems, ["Volume database/data: degraded"]);
+    const result = await checkVolumes(kube, budget(5_000));
+    assert.deepEqual(result.problems, ["Volume campfire/campfire-data: degraded"]);
+  });
+
+  it("says nothing about backups, however old they are — that is the backups beat's", async () => {
+    const kube = fakeKube({
+      "/apis/longhorn.io/v1beta2/volumes": [
+        {
+          metadata: { name: "pvc-2", creationTimestamp: "2020-01-01T00:00:00Z" },
+          status: {
+            robustness: "healthy",
+            state: "detached",
+            kubernetesStatus: { namespace: "database", pvcName: "drill-nightscout-1" },
+          },
+        },
+      ],
+    });
+    const result = await checkVolumes(kube, budget(5_000));
+    assert.deepEqual(result.problems, []);
+    assert.equal("backups" in result, false);
   });
 });
 
