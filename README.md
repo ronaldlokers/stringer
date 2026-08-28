@@ -69,8 +69,10 @@ docker run --rm -e DIGEST_DATE=2026-03-29 ghcr.io/ronaldlokers/stringer:latest h
 
 A volume that is deliberately not backed up says so on its claim:
 `backup.stringer/none: "a cache, rebuilt on start"`, as an annotation rather
-than a label — a label value cannot hold a sentence. The beat quotes the reason
-back, so an exemption nobody can justify reads as one.
+than a label — a label value cannot hold a sentence. The reason lives on the
+claim, for whoever reads the manifest; the beat does not quote it back, since
+an exemption line every Sunday is exactly the noise the cadence rule exists to
+avoid.
 
 ## Working on it
 

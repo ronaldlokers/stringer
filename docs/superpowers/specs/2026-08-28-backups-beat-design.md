@@ -114,10 +114,11 @@ An annotation rather than a label because the value is a sentence: label values
 admit only alphanumerics, dashes, underscores and dots, so a reason worth
 reading would be rejected by the API server.
 
-The value is the reason and the beat quotes it back on the Sunday the volume
-first appears, so an exemption nobody can justify reads as one. The reason
-lives beside the volume in the manifest rather than in an environment variable
-on the beat, which is the difference between a decision and a list that drifts.
+The value is the reason, for whoever reads the manifest. The beat does not
+quote it back — an exemption line every Sunday is exactly the noise the
+cadence rule exists to avoid. It lives beside the volume rather than in an
+environment variable on the beat, which is the difference between a decision
+and a list that drifts.
 
 ## Cadence, and the noise it prevents
 

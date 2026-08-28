@@ -28,6 +28,12 @@ export interface Thresholds {
   readonly leakHours: number;
 }
 
+/**
+ * A twin of `hoursSince` in `copy/cluster/kube.ts`, kept separate on purpose:
+ * importing it would pull the Kubernetes API client into the import graph of
+ * a module whose whole point is that it is pure. Four lines of duplication is
+ * the cheaper of the two.
+ */
 function hoursBetween(stamp: string, now: Date): number {
   return (now.getTime() - Date.parse(stamp)) / 3_600_000;
 }
@@ -46,6 +52,9 @@ export function findingsFrom(
   const found: Finding[] = [];
 
   for (const failure of inventory.failures) {
+    // Longhorn keeps an Error CR until retention rotates it; without a clock
+    // here a bad night from last week would still read as this morning's news.
+    if (failure.at && hoursBetween(failure.at, now) > thresholds.staleHours) continue;
     found.push({ kind: "failed", text: `${failure.name}: backup failed — ${failure.message}` });
   }
 
@@ -73,22 +82,28 @@ export function findingsFrom(
 
   if (!weekly) return found;
 
-  const leaked = new Map<string, { count: number }>();
+  const leaked = new Map<string, { count: number; bytes: number; hadClaim: boolean }>();
   for (const volume of inventory.volumes) {
     if (volume.live || !volume.detached) continue;
     const created = volume.createdAt;
     if (!created || hoursBetween(created, now) <= thresholds.leakHours) continue;
-    const seen = leaked.get(volume.name) ?? { count: 0 };
+    // A volume with a `pvc` once had a claim pointing at it; one with none
+    // never did, and has no other name than its own — that is the one case
+    // the "never pvc-<uuid> in prose" rule does not cover.
+    const seen = leaked.get(volume.name) ?? { count: 0, bytes: 0, hadClaim: volume.pvc !== undefined };
     seen.count += 1;
+    seen.bytes += volume.sizeBytes;
     leaked.set(volume.name, seen);
   }
-  for (const [name, { count }] of leaked) {
+  for (const [name, { count, bytes, hadClaim }] of leaked) {
+    const held = `${fixed(gigabytes(bytes), 1)} GB`;
+    const reason = hadClaim ? "whose claim is gone" : "with no claim reference";
     found.push({
       kind: "leaked",
       text:
         count === 1
-          ? `${name}: a volume whose claim is gone, still holding space`
-          : `${count} × ${name}: volumes whose claim is gone, still holding space`,
+          ? `${name}: a volume ${reason}, still holding ${held}`
+          : `${count} × ${name}: volumes ${reason}, still holding ${held}`,
     });
   }
 

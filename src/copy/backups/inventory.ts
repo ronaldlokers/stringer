@@ -25,13 +25,18 @@ export interface RawVolume {
   readonly status?: {
     readonly state?: string;
     readonly lastBackupAt?: string;
+    readonly actualSize?: string;
     readonly kubernetesStatus?: { readonly namespace?: string; readonly pvcName?: string };
   };
 }
 
 export interface RawBackupVolume {
   readonly metadata: RawMeta;
-  readonly status?: { readonly dataStored?: string; readonly lastBackupAt?: string };
+  readonly status?: {
+    readonly dataStored?: string;
+    readonly lastBackupAt?: string;
+    readonly volumeName?: string;
+  };
 }
 
 export interface RawBackup {
@@ -73,6 +78,8 @@ export interface VolumeEntry {
   /** The reason on the claim's `backup.stringer/none` annotation. */
   readonly exemption?: string | undefined;
   readonly detached: boolean;
+  /** `status.actualSize`, in bytes — what a leaked volume is still holding. */
+  readonly sizeBytes: number;
 }
 
 export interface OrphanSet {
@@ -84,6 +91,8 @@ export interface OrphanSet {
 export interface Failure {
   readonly name: string;
   readonly message: string;
+  /** The Backup CR's `creationTimestamp` — findings.ts uses it to drop stale ones. */
+  readonly at?: string | undefined;
 }
 
 export interface Target {
@@ -101,6 +110,11 @@ export interface Inventory {
 const EXEMPTION = "backup.stringer/none";
 const GROUP_PREFIX = "recurring-job-group.longhorn.io/";
 const JOB_PREFIX = "recurring-job.longhorn.io/";
+
+/** A missing `creationTimestamp` sorts as oldest, never as newest. */
+function isNewer(a: RawBackup, b: RawBackup): boolean {
+  return Date.parse(a.metadata.creationTimestamp ?? "") > Date.parse(b.metadata.creationTimestamp ?? "");
+}
 
 export function inventoryFrom(
   volumes: readonly RawVolume[],
@@ -146,6 +160,7 @@ export function inventoryFrom(
         ? { exemption: claim.metadata.annotations[EXEMPTION] }
         : {}),
       detached: (volume.status?.state ?? "") !== "attached",
+      sizeBytes: Number(volume.status?.actualSize ?? "0") || 0,
     };
     entries.push(entry);
     byName.set(entry.volume, entry);
@@ -153,30 +168,53 @@ export function inventoryFrom(
 
   const orphans: OrphanSet[] = [];
   for (const set of backupVolumes) {
-    const entry = byName.get(set.metadata.name);
+    // On a cluster with more than one backup target the BackupVolume CR's own
+    // name is not the Longhorn volume name; `status.volumeName` is, when
+    // Longhorn has filled it in. Falling back to the CR name keeps the join
+    // working on the single-target clusters where it was never set.
+    const volumeName = set.status?.volumeName || set.metadata.name;
+    const entry = byName.get(volumeName);
     if (entry?.live) continue;
     orphans.push({
-      volume: set.metadata.name,
+      volume: volumeName,
       storedBytes: Number(set.status?.dataStored ?? "0") || 0,
       ...(set.status?.lastBackupAt ? { lastBackupAt: set.status.lastBackupAt } : {}),
     });
   }
 
-  const failures: Failure[] = [];
+  // Longhorn keeps Error backups until retention rotates them, so one bad
+  // night otherwise reports the same volume every morning for a week. Keep
+  // only the newest Error CR per volume; findings.ts decides, with a clock,
+  // whether even that one is still news.
+  const latestErrorByVolume = new Map<string, RawBackup>();
   for (const backup of backups) {
     if (backup.status?.state !== "Error") continue;
     // Longhorn puts the volume on a label and sometimes on the status; the
-    // label is the one that is always there.
+    // label is the one that is always there. `??` would treat an empty
+    // string — what Longhorn leaves on a backup that errored before it
+    // resolved a volume — as present, so the lookup below would miss and the
+    // failure would be dropped in silence.
     const volumeName =
-      backup.status?.volumeName ?? backup.metadata.labels?.["longhornvolume"] ?? "";
+      backup.status?.volumeName || backup.metadata.labels?.["longhornvolume"] || "";
     const entry = byName.get(volumeName);
     // An errored backup for a volume nobody owns any more is orphan noise, and
     // is already counted as such.
     if (!entry?.live) continue;
-    failures.push({ name: entry.name, message: backup.status?.error ?? "no reason given" });
+    const existing = latestErrorByVolume.get(volumeName);
+    if (!existing || isNewer(backup, existing)) latestErrorByVolume.set(volumeName, backup);
+  }
+  const failures: Failure[] = [];
+  for (const [volumeName, backup] of latestErrorByVolume) {
+    const entry = byName.get(volumeName);
+    if (!entry) continue;
+    failures.push({
+      name: entry.name,
+      message: backup.status?.error ?? "no reason given",
+      ...(backup.metadata.creationTimestamp ? { at: backup.metadata.creationTimestamp } : {}),
+    });
   }
 
-  const target = targets[0];
+  const target = targets.find((one) => one.metadata.name === "default") ?? targets[0];
   const unavailable = target?.status?.conditions?.find(
     (condition) => condition.type === "Unavailable" && condition.status === "True",
   );

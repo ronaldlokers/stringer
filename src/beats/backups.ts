@@ -54,6 +54,9 @@ export async function backups(round: Round, environment = process.env): Promise<
   try {
     // All five, or none. An inventory missing its claim list reports every
     // volume in the cluster as leaked, which is worse than reporting nothing.
+    // The five reads share this one 30s budget sequentially rather than
+    // running in parallel, but each request is capped at 1.5s by Kube, so
+    // three full retry attempts of five reads each still fit inside it.
     inventory = await withRetry(
       async () =>
         inventoryFrom(

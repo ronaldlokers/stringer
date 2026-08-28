@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createServer, type Server } from "node:http";
-import { after, describe, it } from "node:test";
+import { after, beforeEach, describe, it } from "node:test";
 
 import { inventoryFrom } from "../src/copy/backups/inventory.js";
 import { findingsFrom, renderBackups } from "../src/copy/backups/findings.js";
@@ -10,13 +10,18 @@ import type { Posted, Round } from "../src/rounds.js";
 
 /** A Longhorn volume as the API returns it. */
 function volume(over: Record<string, unknown> = {}) {
-  const { name = "pvc-1", namespace = "campfire", pvc = "campfire-data", ...rest } = over as
-    Record<string, any>;
+  const {
+    name = "pvc-1",
+    namespace = "campfire",
+    pvc = "campfire-data",
+    labels = { "recurring-job-group.longhorn.io/default": "enabled" },
+    ...rest
+  } = over as Record<string, any>;
   return {
     metadata: {
       name,
       creationTimestamp: "2026-08-01T00:00:00Z",
-      labels: { "recurring-job-group.longhorn.io/default": "enabled" },
+      labels,
     },
     status: {
       state: "attached",
@@ -142,6 +147,125 @@ describe("the inventory", () => {
   it("treats a cluster with no backup target at all as unavailable", () => {
     assert.equal(inventoryFrom([], [], [], [], []).target.available, false);
   });
+
+  it("decides availability from the default target, not merely the first one listed", () => {
+    const targets = [
+      { metadata: { name: "secondary" }, status: { available: true } },
+      {
+        metadata: { name: "default" },
+        status: {
+          available: false,
+          conditions: [{ type: "Unavailable", status: "True", message: "dial tcp: i/o timeout" }],
+        },
+      },
+    ];
+    const model = inventoryFrom([], [], [], targets, []);
+    assert.equal(model.target.available, false);
+    assert.equal(model.target.message, "dial tcp: i/o timeout");
+  });
+
+  it("marks a volume attached to something as not detached", () => {
+    const model = inventoryFrom(
+      [volume({ status: { state: "attached" } })],
+      [],
+      [],
+      [],
+      [claim("campfire", "campfire-data", "pvc-1")],
+    );
+    assert.equal(model.volumes[0]!.detached, false);
+  });
+
+  it("marks a volume in any other state as detached", () => {
+    const model = inventoryFrom(
+      [volume({ status: { state: "detached" } })],
+      [],
+      [],
+      [],
+      [claim("campfire", "campfire-data", "pvc-1")],
+    );
+    assert.equal(model.volumes[0]!.detached, true);
+  });
+
+  it("reads coverage from a per-volume job label, not only the group label", () => {
+    const model = inventoryFrom(
+      [volume({ labels: { "recurring-job.longhorn.io/backup-daily": "enabled" } })],
+      [],
+      [],
+      [],
+      [],
+    );
+    assert.deepEqual(model.volumes[0]!.groups, ["backup-daily"]);
+  });
+
+  it("names a volume with no kubernetesStatus by its Longhorn name — the only name it has", () => {
+    const noStatus = {
+      metadata: { name: "pvc-orphan-9", creationTimestamp: "2026-08-01T00:00:00Z", labels: {} },
+      status: { state: "detached" },
+      spec: {},
+    };
+    const model = inventoryFrom([noStatus], [], [], [], []);
+    assert.equal(model.volumes[0]!.name, "pvc-orphan-9");
+    assert.equal(model.volumes[0]!.pvc, undefined);
+  });
+
+  it("matches a backup volume set by its status volumeName, not only the CR's own name", () => {
+    // Longhorn 1.8 with more than one backup target names the BackupVolume CR
+    // after the target rather than the volume; status.volumeName is the field
+    // that still says which Longhorn volume it belongs to.
+    const backupVolume = {
+      metadata: { name: "bv-abc123" },
+      status: { volumeName: "pvc-1", dataStored: "10" },
+    };
+    const model = inventoryFrom(
+      [volume()],
+      [backupVolume],
+      [],
+      [],
+      [claim("campfire", "campfire-data", "pvc-1")],
+    );
+    assert.deepEqual(model.orphans, []);
+  });
+
+  it("falls back to the BackupVolume CR's own name when status.volumeName is absent", () => {
+    const backupVolume = { metadata: { name: "pvc-gone" }, status: { dataStored: "10" } };
+    const model = inventoryFrom([], [backupVolume], [], [], []);
+    assert.equal(model.orphans[0]!.volume, "pvc-gone");
+  });
+
+  it("finds a failed backup by the label even when the status volumeName is the empty string", () => {
+    // Longhorn leaves status.volumeName as "" on a backup that errored before
+    // it resolved a volume; `??` would treat that as present and miss the
+    // label fallback below it, dropping the failure in silence.
+    const backup = {
+      metadata: { name: "backup-abc", labels: { longhornvolume: "pvc-1" } },
+      status: { state: "Error", error: "connection refused", volumeName: "" },
+    };
+    const model = inventoryFrom([volume()], [], [backup], [], [claim("campfire", "campfire-data", "pvc-1")]);
+    assert.deepEqual(model.failures, [
+      { name: "campfire/campfire-data", message: "connection refused" },
+    ]);
+  });
+
+  it("keeps only the newest Error backup per volume", () => {
+    const older = {
+      metadata: { name: "backup-old", labels: { longhornvolume: "pvc-1" }, creationTimestamp: "2026-08-20T00:00:00Z" },
+      status: { state: "Error", error: "stale error" },
+    };
+    const newer = {
+      metadata: { name: "backup-new", labels: { longhornvolume: "pvc-1" }, creationTimestamp: "2026-08-27T00:00:00Z" },
+      status: { state: "Error", error: "fresh error" },
+    };
+    const model = inventoryFrom(
+      [volume()],
+      [],
+      [older, newer],
+      [],
+      [claim("campfire", "campfire-data", "pvc-1")],
+    );
+    assert.equal(model.failures.length, 1);
+    assert.equal(model.failures[0]!.message, "fresh error");
+    assert.equal(model.failures[0]!.at, "2026-08-27T00:00:00Z");
+  });
 });
 
 const NOW = new Date("2026-08-28T07:30:00Z");
@@ -158,6 +282,7 @@ function entry(over: Partial<VolumeEntry> = {}): VolumeEntry {
     createdAt: "2026-01-01T00:00:00Z",
     groups: ["default"],
     detached: false,
+    sizeBytes: 0,
     ...over,
   };
 }
@@ -189,6 +314,11 @@ describe("the daily findings", () => {
   it("leaves a backup one hour inside the window alone", () => {
     const fresh = entry({ lastBackupAt: "2026-08-27T06:30:00Z" }); // 25 hours
     assert.deepEqual(findingsFrom(model({ volumes: [fresh] }), NOW, LIMITS, false), []);
+  });
+
+  it("leaves a backup exactly at the 26-hour boundary alone", () => {
+    const exact = entry({ lastBackupAt: "2026-08-27T05:30:00Z" }); // exactly 26h
+    assert.deepEqual(findingsFrom(model({ volumes: [exact] }), NOW, LIMITS, false), []);
   });
 
   it("counts a live volume that has never been backed up as stale, once it is old enough", () => {
@@ -227,6 +357,29 @@ describe("the daily findings", () => {
     assert.match(found[0]!.text, /no space left on device/);
   });
 
+  it("drops a failure older than the stale window — last week's Error CR is not this morning's news", () => {
+    const sixDaysAgo = new Date(NOW.getTime() - 6 * 24 * 3_600_000).toISOString();
+    const found = findingsFrom(
+      model({ failures: [{ name: "campfire/campfire-data", message: "no space left on device", at: sixDaysAgo }] }),
+      NOW,
+      LIMITS,
+      false,
+    );
+    assert.deepEqual(found, []);
+  });
+
+  it("still reports a failure from this morning", () => {
+    const anHourAgo = new Date(NOW.getTime() - 3_600_000).toISOString();
+    const found = findingsFrom(
+      model({ failures: [{ name: "campfire/campfire-data", message: "no space left on device", at: anHourAgo }] }),
+      NOW,
+      LIMITS,
+      false,
+    );
+    assert.equal(found.length, 1);
+    assert.equal(found[0]!.kind, "failed");
+  });
+
   it("holds the standing conditions back on a weekday", () => {
     const leaked = entry({ live: false, detached: true, lastBackupAt: undefined });
     const found = findingsFrom(
@@ -240,7 +393,7 @@ describe("the daily findings", () => {
 });
 
 describe("the Sunday findings", () => {
-  it("counts leaked volumes of one name as one line", () => {
+  it("counts leaked volumes of one name as one line, holding what they still use together", () => {
     const leaked = Array.from({ length: 10 }, (_, index) =>
       entry({
         volume: `pvc-drill-${index}`,
@@ -250,12 +403,14 @@ describe("the Sunday findings", () => {
         live: false,
         detached: true,
         lastBackupAt: undefined,
+        sizeBytes: 1_000_000_000, // 1 GB each
       }),
     );
     const found = findingsFrom(model({ volumes: leaked }), NOW, LIMITS, true);
     assert.equal(found.length, 1);
     assert.equal(found[0]!.kind, "leaked");
     assert.match(found[0]!.text, /10 × database\/drill-nightscout-1/);
+    assert.match(found[0]!.text, /10\.0 GB/);
   });
 
   it("does not call a volume leaked while its drill may still be running", () => {
@@ -287,6 +442,26 @@ describe("the Sunday findings", () => {
     assert.equal(found.filter((one) => one.kind === "leaked").length, 0);
   });
 
+  it("names a claimless leaked volume by its Longhorn name and says there is no claim reference", () => {
+    // A volume with no PVC ever bound has no other name than its own — the
+    // "never pvc-<uuid> in prose" rule is about volumes that have a claim.
+    const neverClaimed = entry({
+      volume: "pvc-scratch-9",
+      name: "pvc-scratch-9",
+      namespace: undefined,
+      pvc: undefined,
+      live: false,
+      detached: true,
+      lastBackupAt: undefined,
+      createdAt: "2026-08-01T00:00:00Z",
+    });
+    const found = findingsFrom(model({ volumes: [neverClaimed] }), NOW, LIMITS, true);
+    assert.equal(found.length, 1);
+    assert.equal(found[0]!.kind, "leaked");
+    assert.match(found[0]!.text, /pvc-scratch-9/);
+    assert.match(found[0]!.text, /no claim reference/);
+  });
+
   it("sums the orphaned backup sets into one line", () => {
     const found = findingsFrom(
       model({
@@ -310,7 +485,7 @@ describe("the Sunday findings", () => {
     assert.match(found[0]!.text, /campfire\/campfire-data/);
   });
 
-  it("quotes the reason an exempt volume gives, instead of reporting it", () => {
+  it("stays quiet about a volume whose claim says why", () => {
     const exempt = entry({ groups: [], exemption: "a cache, rebuilt on start" });
     const found = findingsFrom(model({ volumes: [exempt] }), NOW, LIMITS, true);
     assert.deepEqual(found, []);
@@ -398,6 +573,20 @@ describe("the beat", async () => {
   const api = await apiServer();
   after(() => api.close());
 
+  // The four tests below share one server across the whole describe block,
+  // and used to share its mutable `lists` too — whatever the previous test
+  // left behind was still there for the next one. Reset to a known baseline
+  // before each so the tests can run in any order, or alone.
+  beforeEach(() => {
+    api.lists["/apis/longhorn.io/v1beta2/volumes"] = [];
+    api.lists["/apis/longhorn.io/v1beta2/backupvolumes"] = [];
+    api.lists["/apis/longhorn.io/v1beta2/backups"] = [];
+    api.lists["/apis/longhorn.io/v1beta2/backuptargets"] = [
+      { metadata: { name: "default" }, status: { available: true } },
+    ];
+    api.lists["/api/v1/persistentvolumeclaims"] = [];
+  });
+
   const environment = (over: Record<string, string> = {}): NodeJS.ProcessEnv => ({
     KUBE_API: api.base,
     DIGEST_TIMEZONE: "Europe/Amsterdam",
@@ -408,10 +597,6 @@ describe("the beat", async () => {
   });
 
   it("says nothing on a morning with nothing wrong", async () => {
-    api.lists["/apis/longhorn.io/v1beta2/backuptargets"] = [
-      { metadata: { name: "default" }, status: { available: true } },
-    ];
-    api.lists["/apis/longhorn.io/v1beta2/volumes"] = [];
     const round = new Recording();
     await backups(round, environment());
     assert.deepEqual(round.said, []);
@@ -459,8 +644,26 @@ describe("the beat", async () => {
     } finally {
       api.broken.delete("/api/v1/persistentvolumeclaims");
     }
+    // The error path returns before any finding is computed, so this is the
+    // whole report: one message, and nothing else follows it.
+    assert.equal(round.said.length, 1);
     assert.match(round.said[0]!, /could not read Longhorn/);
-    assert.doesNotMatch(round.said[0]!, /leaked|never backed up/);
+  });
+
+  it("names a leaked volume on the day the cadence wiring says to look", async () => {
+    api.lists["/apis/longhorn.io/v1beta2/volumes"] = [
+      {
+        metadata: { name: "pvc-drill-1", creationTimestamp: "2020-01-01T00:00:00Z", labels: {} },
+        status: {
+          state: "detached",
+          kubernetesStatus: { namespace: "database", pvcName: "drill-nightscout-1" },
+        },
+      },
+    ];
+    const round = new Recording();
+    await backups(round, environment({ DIGEST_DAY: "weekly" }));
+    assert.equal(round.said.length, 1);
+    assert.match(round.said[0]!, /drill-nightscout-1/);
   });
 });
 
