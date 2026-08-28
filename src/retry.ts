@@ -52,10 +52,16 @@ export async function withRetry<T>(
     } catch (error) {
       last = error;
       if (round + 1 < attempts) {
+        // A server that says how long to wait knows better than this default:
+        // API Priority and Fairness answers 429 with a Retry-After, and
+        // retrying inside it spends another share of the budget to be refused
+        // again. See Throttled in copy/cluster/kube.ts.
+        const asked = (error as { retryAfterMs?: unknown } | null)?.retryAfterMs;
+        const wait = typeof asked === "number" && asked > 0 ? asked : delayMs;
         process.stdout.write(
-          `${what} attempt ${round + 1} failed (${describe(error)}), retrying\n`,
+          `${what} attempt ${round + 1} failed (${describe(error)}), retrying in ${wait}ms\n`,
         );
-        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        await new Promise((resolve) => setTimeout(resolve, wait));
       }
     }
   }

@@ -31,6 +31,38 @@ const TOKEN_FILE = "/var/run/secrets/kubernetes.io/serviceaccount/token";
  */
 export const CA_FILE = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt";
 
+/**
+ * A refusal the server told us how to survive.
+ *
+ * API Priority and Fairness answers 429 with a `Retry-After` in seconds when a
+ * flow has spent its share. Retrying on a fixed delay ignores that: the beat
+ * that reads 649 Backup objects retried three times in two seconds, was
+ * refused three times, and reported the cluster unreadable while the API server
+ * was telling it exactly how long to wait.
+ *
+ * So the wait comes back with the error, and `withRetry` uses it.
+ */
+export class Throttled extends Error {
+  constructor(
+    message: string,
+    readonly retryAfterMs: number,
+  ) {
+    super(message);
+    this.name = "Throttled";
+  }
+}
+
+/** What the server asks for, or a second — its own default when it says nothing. */
+const DEFAULT_RETRY_AFTER_MS = 1_000;
+/** Long enough to be worth honouring, short enough that a beat still finishes. */
+const MAX_RETRY_AFTER_MS = 15_000;
+
+function retryAfterFrom(response: Response): number {
+  const seconds = Number(response.headers.get("retry-after"));
+  if (!Number.isFinite(seconds) || seconds <= 0) return DEFAULT_RETRY_AFTER_MS;
+  return Math.min(seconds * 1_000, MAX_RETRY_AFTER_MS);
+}
+
 /** Per-request ceiling, well inside the overall budget. */
 const PER_REQUEST_MS = 1_500;
 
@@ -61,7 +93,7 @@ export class Kube {
       headers,
       signal: AbortSignal.timeout(10_000),
     });
-    if (!response.ok) throw new Error(`HTTP ${response.status} for ${path}`);
+    if (!response.ok) throw failure(response, path);
     return response.text();
   }
 
@@ -112,9 +144,24 @@ export class Kube {
       headers,
       signal: AbortSignal.timeout(Math.min(PER_REQUEST_MS, remaining)),
     });
-    if (!response.ok) throw new Error(`HTTP ${response.status} for ${path}`);
+    if (!response.ok) throw failure(response, path);
     return response.json();
   }
+}
+
+/**
+ * The error for a response that was not ok.
+ *
+ * 429 and 503 are the two the server offers to schedule for us: the first is
+ * priority and fairness, the second an apiserver that is starting or shedding.
+ * Everything else is a plain failure with nothing to wait for.
+ */
+function failure(response: Response, path: string): Error {
+  const message = `HTTP ${response.status} for ${path}`;
+  if (response.status === 429 || response.status === 503) {
+    return new Throttled(message, retryAfterFrom(response));
+  }
+  return new Error(message);
 }
 
 export interface Condition {
