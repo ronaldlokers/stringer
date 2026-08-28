@@ -220,7 +220,6 @@ export async function checkVolumes(
     status?: {
       robustness?: string;
       state?: string;
-      lastBackupAt?: string;
       kubernetesStatus?: { namespace?: string; pvcName?: string };
     };
   };

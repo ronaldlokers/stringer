@@ -20,7 +20,7 @@ export const HELP =
   "<li><code>status</code> — anything currently wrong, across every check</li>" +
   "<li><code>certs</code> — certificate expiry per Ingress</li>" +
   "<li><code>backups</code> — Postgres cluster backup recency</li>" +
-  "<li><code>longhorn</code> — volume health and replica state</li>" +
+  "<li><code>longhorn</code> — volume health and replica state (backup recency moved to the <code>backups</code> beat)</li>" +
   "<li><code>why</code> — ask a model to explain a failure (operator only)</li>" +
   "<li><code>reconcile &lt;kustomization&gt;</code> — ask Flux to sync now (operator only)</li>" +
   "<li><code>restart &lt;namespace&gt;/&lt;deployment&gt;</code> — roll a workload (operator only)</li>" +
